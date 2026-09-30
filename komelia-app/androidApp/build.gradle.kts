@@ -70,13 +70,16 @@ android {
     }
     defaultConfig {
         applicationId = "io.github.snd_r.komelia"
+        // Thor fork: install next to the store build of Komelia instead of replacing it.
+        applicationIdSuffix = ".thor"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = libs.versions.android.versionCode.get().toInt()
         versionName = libs.versions.app.version.get()
 
         val enableSelfUpdates = when (androidVariant) {
-            AndroidVariant.STANDALONE -> "true"
+            // Thor fork: upstream releases would install stock Komelia, not this build.
+            AndroidVariant.STANDALONE -> "false"
             AndroidVariant.FDROID -> "false"
             AndroidVariant.PLAY -> "false"
         }
