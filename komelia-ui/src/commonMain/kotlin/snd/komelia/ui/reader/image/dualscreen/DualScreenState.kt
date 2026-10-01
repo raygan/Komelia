@@ -236,15 +236,16 @@ class DualScreenState(
     }
 
     /**
-     * Pinching the second screen sets the zoom level of the current mode: spreading the fingers
-     * zooms in. The view follows the point between the fingers.
+     * Pinching the second screen sets the zoom level of the current mode. It resizes the outline:
+     * spreading the fingers makes the outline bigger, which zooms out. The view follows the point
+     * between the fingers.
      */
     fun pinch(factor: Float, center: Offset) {
         if (!touching) return
         focus = center
         when (mode.value) {
-            ZoomMode.QUICK_ZOOM -> quickZoomLevel = (quickZoomLevel * factor).coerceIn(1f, MAX_ZOOM_LEVEL)
-            ZoomMode.LOUPE -> loupeZoomLevel = (loupeZoomLevel * factor).coerceIn(1f, MAX_ZOOM_LEVEL)
+            ZoomMode.QUICK_ZOOM -> quickZoomLevel = (quickZoomLevel / factor).coerceIn(1f, MAX_ZOOM_LEVEL)
+            ZoomMode.LOUPE -> loupeZoomLevel = (loupeZoomLevel / factor).coerceIn(1f, MAX_ZOOM_LEVEL)
         }
         // A running zoom-in animation picks up the new level and focus by itself.
         if (animation?.isActive == true) return
