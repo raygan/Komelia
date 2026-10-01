@@ -18,6 +18,9 @@ import snd.komelia.settings.model.PagedReadingDirection.RIGHT_TO_LEFT
 import snd.komelia.ui.reader.image.ScreenScaleState
 import snd.komelia.ui.reader.image.paged.PagedReaderState
 
+/** How long the Loupe takes to glide to a newly touched spot. */
+private const val LOUPE_MOVE_MILLIS = 90
+
 /** Set while the paged reader runs in dual-screen mode, so reader controls can offer its gestures. */
 val LocalDualScreenState = staticCompositionLocalOf<DualScreenState?> { null }
 
@@ -78,7 +81,12 @@ class DualScreenState(
                 if (rest == null) rest = currentZoom() to currentOffset()
                 animateView(toZoom = { zoomFor(quickZoomLevel.value) }, toOffset = { offsetFor(focus, zoomFor(quickZoomLevel.value)) })
             }
-            ZoomMode.LOUPE -> if (animation?.isActive != true) showLoupe()
+            // Glide to the touched spot rather than jumping there.
+            ZoomMode.LOUPE -> animateView(
+                toZoom = { zoomFor(loupeZoomLevel.value) },
+                toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel.value)) },
+                millis = minOf(animationMillis.value, LOUPE_MOVE_MILLIS),
+            )
         }
     }
 
@@ -101,7 +109,7 @@ class DualScreenState(
         touching = false
         if (mode.value != ZoomMode.QUICK_ZOOM) return
         val (restZoom, restOffset) = rest ?: return
-        animateView(toZoom = { restZoom }, toOffset = { restOffset }) { if (!touching) rest = null }
+        animateView(toZoom = { restZoom }, toOffset = { restOffset }, onEnd = { if (!touching) rest = null })
     }
 
     // ---- Modes ----
@@ -170,13 +178,17 @@ class DualScreenState(
      * Animates the main reader from where it is now to a target that's re-read every frame,
      * so a finger moving during the animation is followed.
      */
-    private fun animateView(toZoom: () -> Float, toOffset: () -> Offset, onEnd: () -> Unit = {}) {
+    private fun animateView(
+        toZoom: () -> Float,
+        toOffset: () -> Offset,
+        millis: Int = animationMillis.value,
+        onEnd: () -> Unit = {},
+    ) {
         animation?.cancel()
         val fromZoom = currentZoom()
         val fromOffset = currentOffset()
         animation = scope.launch {
             val progress = Animatable(0f)
-            val millis = animationMillis.value
             if (millis > 0) {
                 progress.animateTo(1f, tween(millis, easing = FastOutSlowInEasing)) {
                     val t = value

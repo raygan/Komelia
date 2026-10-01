@@ -101,11 +101,11 @@ fun ScalableContainer(
             }
             .pointerInput(areaSize) {
                 detectTransformGestures { event, centroid, pan, zoom, _ ->
+                    // Zoom around the fingers, then follow them, so a pinch can also move the view.
                     if (zoom != 1.0f) {
                         scaleState.multiplyZoom(zoom, centroid - areaCenter)
-                    } else {
-                        scaleState.addPan(event, pan)
                     }
+                    scaleState.addPan(event, pan)
                 }
             }
             .onPointerEvent(PointerEventType.Scroll) { event ->
