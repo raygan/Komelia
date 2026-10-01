@@ -344,7 +344,7 @@ private class NavigatorImageCache(
 }
 
 /** In Quick Zoom, how long a touch has to last before zooming, so quick taps don't zoom. */
-private const val QUICK_ZOOM_HOLD_MILLIS = 120L
+private const val QUICK_ZOOM_HOLD_MILLIS = 60L
 
 /** How long to keep showing the previous spread while the new one is prepared. */
 private const val SWAP_WAIT_MILLIS = 250L
