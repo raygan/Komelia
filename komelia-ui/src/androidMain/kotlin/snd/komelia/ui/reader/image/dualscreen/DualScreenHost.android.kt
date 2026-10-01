@@ -7,6 +7,8 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Bundle
 import android.view.Display
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
@@ -41,7 +43,11 @@ actual fun DualScreenHost(pagedReaderState: PagedReaderState, dualScreenState: D
             NavigatorContent(pagedReaderState, dualScreenState)
         }
         presentation.show()
-        onDispose { presentation.dismiss() }
+        DualScreenControllerInput.target = dualScreenState
+        onDispose {
+            if (DualScreenControllerInput.target === dualScreenState) DualScreenControllerInput.target = null
+            presentation.dismiss()
+        }
     }
 }
 
@@ -91,4 +97,11 @@ private class NavigatorPresentation(
             }
         }
     }
+
+    // Controller input goes to whichever screen was touched last, so this window forwards it too.
+    override fun dispatchKeyEvent(event: KeyEvent) =
+        DualScreenControllerInput.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent) =
+        DualScreenControllerInput.dispatchGenericMotionEvent(event) || super.dispatchGenericMotionEvent(event)
 }

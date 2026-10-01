@@ -4,6 +4,8 @@ import android.app.Activity
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.webkit.WebView
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -29,6 +31,7 @@ import kotlinx.coroutines.sync.withLock
 import snd.komelia.ui.MainView
 import snd.komelia.ui.platform.PlatformType
 import snd.komelia.ui.platform.WindowSizeClass
+import snd.komelia.ui.reader.image.dualscreen.DualScreenControllerInput
 
 private val initScope = CoroutineScope(Dispatchers.Default)
 private val initMutex = Mutex()
@@ -73,6 +76,13 @@ class MainActivity : AppCompatActivity() {
             )
         }
     }
+
+    // Dual-screen reading takes game controller input while it's open; otherwise this passes through.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        DualScreenControllerInput.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        DualScreenControllerInput.dispatchGenericMotionEvent(event) || super.dispatchGenericMotionEvent(event)
 }
 
 @Composable

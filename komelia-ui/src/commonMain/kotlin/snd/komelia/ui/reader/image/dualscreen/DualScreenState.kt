@@ -4,8 +4,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -17,9 +19,23 @@ import kotlinx.coroutines.launch
 import snd.komelia.settings.model.PagedReadingDirection.RIGHT_TO_LEFT
 import snd.komelia.ui.reader.image.ScreenScaleState
 import snd.komelia.ui.reader.image.paged.PagedReaderState
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.exp
 
 /** How long the Loupe takes to glide to a newly touched spot. */
 private const val LOUPE_MOVE_MILLIS = 90
+
+/** How long a step through the page takes. */
+private const val STEP_MILLIS = 220
+
+/** Left stick at full tilt moves this many screenfuls per second. */
+private const val MOVE_STICK_RATE = 1.5f
+
+/** Right stick at full tilt roughly doubles the zoom level every half second. */
+private const val ZOOM_STICK_RATE = 1.4f
+
+private const val MAX_ZOOM_LEVEL = 8f
 
 /** Set while the paged reader runs in dual-screen mode, so reader controls can offer its gestures. */
 val LocalDualScreenState = staticCompositionLocalOf<DualScreenState?> { null }
@@ -55,6 +71,14 @@ class DualScreenState(
 
     private var focus = Offset(0.5f, 0.5f)
     private var touching = false
+
+    /** Stepping back past a spread's first stop lands on the previous spread's last stop. */
+    private var startNextSpreadAtEnd = false
+
+    private var stickX = 0f
+    private var stickY = 0f
+    private var zoomStick = 0f
+    private var stickJob: Job? = null
     private var animation: Job? = null
 
     /** In Quick Zoom: the zoom and offset to return to when the finger lifts. */
@@ -63,7 +87,8 @@ class DualScreenState(
     init {
         scaleState.userZoomEvents.onEach { onUserZoom() }.launchIn(scope)
         pagedReaderState.spreadStartOverride = { newScale ->
-            if (mode.value == ZoomMode.LOUPE) startZoomedIn(newScale)
+            if (mode.value == ZoomMode.LOUPE) startZoomedIn(newScale, atEnd = startNextSpreadAtEnd)
+            startNextSpreadAtEnd = false
         }
     }
 
@@ -165,13 +190,136 @@ class DualScreenState(
         scaleState.setZoomAndOffset(zoom, offsetFor(focus, zoom))
     }
 
-    /** New spread in Loupe mode: stay zoomed and start at the top of the first page. */
-    private fun startZoomedIn(newScale: ScreenScaleState) {
+    /**
+     * New spread in Loupe mode: stay zoomed and start in the top corner where reading starts, or
+     * the bottom corner where it ends when stepping backwards.
+     */
+    private fun startZoomedIn(newScale: ScreenScaleState, atEnd: Boolean) {
         val zoom = loupeZoomLevel.value * fullVisibilityZoom(newScale)
-        // Offsets past the edge are clamped, so this lands in the top corner where reading starts.
+        // Offsets past the edge are clamped, so these land exactly in a corner.
         val far = 1_000_000f
-        val x = if (pagedReaderState.readingDirection.value == RIGHT_TO_LEFT) -far else far
-        newScale.setZoomAndOffset(zoom, Offset(x, far))
+        val readsLeftToRight = pagedReaderState.readingDirection.value != RIGHT_TO_LEFT
+        val x = if (readsLeftToRight != atEnd) far else -far
+        val y = if (atEnd) -far else far
+        newScale.setZoomAndOffset(zoom, Offset(x, y))
+    }
+
+    // ---- Page controls ----
+
+    /** L1/R1 and edge taps: in Loupe, step through the spread before turning the page. */
+    fun stepNext() = if (mode.value == ZoomMode.LOUPE) step(forward = true) else turnNext()
+    fun stepPrevious() = if (mode.value == ZoomMode.LOUPE) step(forward = false) else turnPrevious()
+
+    /** L2/R2 and the D-pad: always turn the whole spread. */
+    fun turnNext() {
+        if (!touching) pagedReaderState.nextPage()
+    }
+
+    fun turnPrevious() {
+        if (!touching) pagedReaderState.previousPage()
+    }
+
+    fun turnLeft() = if (readsRightToLeft()) turnNext() else turnPrevious()
+    fun turnRight() = if (readsRightToLeft()) turnPrevious() else turnNext()
+
+    private fun readsRightToLeft() = pagedReaderState.readingDirection.value == RIGHT_TO_LEFT
+
+    private fun step(forward: Boolean) {
+        if (touching) return
+        val stops = stops()
+        if (stops.isEmpty()) return
+        val center = viewCenter()
+        val current = stops.indices.minBy { (stops[it] - center).getDistanceSquared() }
+        val next = current + if (forward) 1 else -1
+        if (next in stops.indices) {
+            focus = stops[next]
+            animateView(
+                toZoom = { zoomFor(loupeZoomLevel.value) },
+                toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel.value)) },
+                millis = if (animationMillis.value == 0) 0 else STEP_MILLIS,
+            )
+        } else if (forward) {
+            pagedReaderState.nextPage()
+        } else {
+            startNextSpreadAtEnd = true
+            val before = pagedReaderState.currentSpreadIndex.value
+            pagedReaderState.previousPage()
+            // At the start of the book there's no previous spread to land on.
+            if (pagedReaderState.currentSpreadIndex.value == before) startNextSpreadAtEnd = false
+        }
+    }
+
+    /**
+     * Where Loupe stepping stops on the current spread, in reading order: page by page, each page
+     * in rows from the top, each row across in reading direction. Neighbouring stops overlap a little.
+     */
+    private fun stops(): List<Offset> {
+        val pages = pagedReaderState.currentSpread.value.pages
+        if (pages.isEmpty()) return emptyList()
+        val aspects = pages.map { page ->
+            val size = page.metadata.size
+            if (size == null || size.height == 0) 0.7f else size.width.toFloat() / size.height
+        }
+        // Page ranges in reading order, laid out left to right; right-to-left spreads put the first
+        // page on the right, so mirror them.
+        val total = aspects.sum()
+        var x = 0f
+        val ranges = aspects.map { aspect -> (x / total to (x + aspect) / total).also { x += aspect } }
+        val readingOrder = if (readsRightToLeft()) ranges.map { (a, b) -> (1 - b) to (1 - a) } else ranges
+
+        val view = visibleFraction(zoomFor(loupeZoomLevel.value))
+        val stops = mutableListOf<Offset>()
+        for ((left, right) in readingOrder) {
+            val columns = centers(left, right, view.width).let { if (readsRightToLeft()) it.reversed() else it }
+            for (row in centers(0f, 1f, view.height)) for (column in columns) {
+                val stop = clampFocus(Offset(column, row), view)
+                if (stops.lastOrNull()?.let { (it - stop).getDistance() < 0.001f } != true) stops += stop
+            }
+        }
+        return stops
+    }
+
+    private fun centers(start: Float, end: Float, view: Float): List<Float> {
+        val length = end - start
+        if (length <= view) return listOf((start + end) / 2)
+        val count = ceil((length - view) / (view * 0.85f)).toInt() + 1
+        return (0 until count).map { start + view / 2 + (length - view) * it / (count - 1) }
+    }
+
+    // ---- Sticks ----
+
+    /** Left stick moves the Loupe; right stick up and down zooms it. Ignored in Quick Zoom. */
+    fun setSticks(x: Float, y: Float, zoom: Float) {
+        stickX = x
+        stickY = y
+        zoomStick = zoom
+        val active = mode.value == ZoomMode.LOUPE && (x != 0f || y != 0f || zoom != 0f)
+        if (active && stickJob?.isActive != true) stickJob = scope.launch { followSticks() }
+    }
+
+    private suspend fun followSticks() {
+        animation?.cancel()
+        focus = viewCenter()
+        var last = withFrameNanos { it }
+        while (mode.value == ZoomMode.LOUPE && !touching && (stickX != 0f || stickY != 0f || zoomStick != 0f)) {
+            val now = withFrameNanos { it }
+            val seconds = ((now - last) / 1e9f).coerceAtMost(0.05f)
+            last = now
+            // Squared response: small tilts for fine adjustment, full tilt to cross the page.
+            if (zoomStick != 0f) {
+                loupeZoomLevel.value = (loupeZoomLevel.value * exp(-zoomStick * abs(zoomStick) * ZOOM_STICK_RATE * seconds))
+                    .coerceIn(1f, MAX_ZOOM_LEVEL)
+            }
+            val view = visibleFraction(zoomFor(loupeZoomLevel.value))
+            focus = clampFocus(
+                Offset(
+                    focus.x + stickX * abs(stickX) * view.width * MOVE_STICK_RATE * seconds,
+                    focus.y + stickY * abs(stickY) * view.height * MOVE_STICK_RATE * seconds,
+                ),
+                view,
+            )
+            showLoupe()
+        }
     }
 
     /**
@@ -202,6 +350,21 @@ class DualScreenState(
             onEnd()
         }
     }
+
+    /** How much of the spread the main reader shows at [zoom], as fractions of its width and height. */
+    private fun visibleFraction(zoom: Float): Size {
+        val target = scaleState.targetSize.value
+        val area = scaleState.areaSize.value
+        val scale = scaleState.zoomToScale(zoom)
+        if (target.width <= 0f || target.height <= 0f || scale <= 0f) return Size(1f, 1f)
+        return Size(area.width / (target.width * scale), area.height / (target.height * scale))
+    }
+
+    /** Keeps a focus point where the view can actually center, so the stick never feels stuck at an edge. */
+    private fun clampFocus(point: Offset, view: Size): Offset = Offset(
+        if (view.width >= 1f) 0.5f else point.x.coerceIn(view.width / 2, 1 - view.width / 2),
+        if (view.height >= 1f) 0.5f else point.y.coerceIn(view.height / 2, 1 - view.height / 2),
+    )
 
     private fun currentZoom() = scaleState.zoom.value
     private fun currentOffset() = scaleState.transformation.value.offset
