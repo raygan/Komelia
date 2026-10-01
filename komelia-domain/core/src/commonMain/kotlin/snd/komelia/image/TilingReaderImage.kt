@@ -81,6 +81,14 @@ abstract class TilingReaderImage(
     @Volatile
     protected var lastUsedScaleFactor: Double? = null
 
+    /**
+     * The last whole-page render, kept underneath the tiles while zoomed in. Tiles only cover the
+     * area around what's visible, so without it the rest of the page is blank until it's
+     * re-rendered when zooming back out.
+     */
+    @Volatile
+    private var baseTile: ReaderImageTile? = null
+
     data class UpdateRequest(
         val visibleDisplaySize: IntRect,
         val zoomFactor: Float,
@@ -325,6 +333,8 @@ abstract class TilingReaderImage(
                     delay = resizedImage.delays?.getOrNull(i) ?: defaultFrameDelay
                 )
             }
+            // Animated images aren't tiled, so they don't need a base.
+            baseTile = frames.singleOrNull()?.tiles?.singleOrNull()
             frameData.value = FrameData(
                 frames = frames,
                 displaySize = displayArea,
@@ -418,8 +428,9 @@ abstract class TilingReaderImage(
         }
 
         if (addedNewTiles) {
+            // The base never matches a tile's region, so it's never in unusedTiles; it's drawn first.
             frameData.value = FrameData(
-                frames = listOf(ImageFrame(newTiles, 0)),
+                frames = listOf(ImageFrame(listOfNotNull(baseTile) + newTiles, 0)),
                 displaySize = displayArea,
                 scaleFactor = scaleFactor
             )
