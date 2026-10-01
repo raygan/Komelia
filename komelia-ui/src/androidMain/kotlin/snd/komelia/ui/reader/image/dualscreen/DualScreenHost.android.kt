@@ -72,6 +72,8 @@ actual fun rememberDualScreenState(pagedReaderState: PagedReaderState): DualScre
 
 @Composable
 actual fun DualScreenHost(pagedReaderState: PagedReaderState, dualScreenState: DualScreenState) {
+    // The main screen's half of the fade while turning; the second screen draws its own.
+    ScreenCover(dualScreenState)
     val activity = LocalContext.current.findActivity() ?: return
     val display = remember(activity) { findSecondScreen(activity) } ?: return
 

@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Size
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import snd.komelia.settings.model.PagedReadingDirection.RIGHT_TO_LEFT
 import snd.komelia.ui.reader.image.ScreenScaleState
 import snd.komelia.ui.reader.image.paged.PagedReaderState
@@ -28,6 +30,15 @@ import kotlin.math.exp
 
 /** How long the Loupe takes to glide to a newly touched spot. */
 private const val LOUPE_MOVE_MILLIS = 90
+
+/** How long the screens take to fade out before turning. */
+const val COVER_FADE_IN_MILLIS = 90L
+
+/** How long the screens take to fade back in after turning. */
+const val COVER_FADE_OUT_MILLIS = 160
+
+/** Never leave the screens covered longer than this, even if the page is slow to load. */
+private const val MAX_COVERED_MILLIS = 900L
 
 /** How long a step through the page takes. */
 private const val STEP_MILLIS = 220
@@ -85,6 +96,14 @@ class DualScreenState(
     val quarterTurns = MutableStateFlow(0)
     private val vertical get() = quarterTurns.value % 2 != 0
     private var sensedQuarterTurns = 0
+    private var targetQuarterTurns = 0
+    private var rotation: Job? = null
+
+    /**
+     * True while both screens should be covered: turning the device re-lays out the reader in
+     * several visible steps, so they happen behind a brief fade instead.
+     */
+    val coverScreens = MutableStateFlow(false)
 
     private var focus = Offset(0.5f, 0.5f)
     private var touching = false
@@ -132,18 +151,40 @@ class DualScreenState(
         applyQuarterTurns()
     }
 
-    /** Held vertically, the reader shows one page at a time. */
+    /**
+     * Held vertically, the reader shows one page at a time. The screens fade out, turn and re-lay
+     * out, then fade back in once the page has loaded at its new size.
+     */
     private fun applyQuarterTurns() {
         val turns = preferences.orientation.quarterTurns ?: sensedQuarterTurns
-        if (turns == quarterTurns.value) return
-        val wasVertical = vertical
-        quarterTurns.value = turns
-        settings.heldVertically.value = vertical
-        if (vertical == wasVertical) return
+        if (turns == targetQuarterTurns) return
+        targetQuarterTurns = turns
+        rotation?.cancel()
+        rotation = scope.launch {
+            coverScreens.value = true
+            delay(COVER_FADE_IN_MILLIS)
 
-        animation?.cancel()
-        rest = null
-        pagedReaderState.forceSinglePage(vertical)
+            val wasVertical = vertical
+            quarterTurns.value = turns
+            settings.heldVertically.value = vertical
+            if (vertical != wasVertical) {
+                animation?.cancel()
+                rest = null
+                pagedReaderState.forceSinglePage(vertical)
+            }
+
+            withTimeoutOrNull(MAX_COVERED_MILLIS) {
+                // The reader picks up its turned size, then reloads the page for it.
+                scaleState.areaSize.first { it.width > 0 && (it.width < it.height) == vertical }
+                delay(100)
+                pagedReaderState.currentSpread.first { spread ->
+                    spread.pages.isNotEmpty() && spread.pages.all { it.imageResult != null }
+                }
+                // Let the page render at the new size.
+                delay(120)
+            }
+            coverScreens.value = false
+        }
     }
 
     /**

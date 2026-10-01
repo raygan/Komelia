@@ -164,6 +164,7 @@ fun NavigatorContent(pagedReaderState: PagedReaderState, dualScreenState: DualSc
         }
 
         ModeAnnouncement(dualScreenState)
+        ScreenCover(dualScreenState)
     }
 }
 
