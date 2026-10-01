@@ -71,7 +71,9 @@ fun NavigatorContent(pagedReaderState: PagedReaderState, dualScreenState: DualSc
     val scope = rememberCoroutineScope()
     val cache = remember { NavigatorImageCache(scope, pagedReaderState) }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+    val turns by dualScreenState.quarterTurns.collectAsState()
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).quarterTurns(turns)) {
         val area = IntSize(constraints.maxWidth, constraints.maxHeight)
         fun visualOrder(pages: List<PageMetadata>) = if (readingDirection == RIGHT_TO_LEFT) pages.reversed() else pages
         val pages = visualOrder(spread.pages.map { it.metadata })

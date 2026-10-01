@@ -3,6 +3,7 @@ package snd.komelia.ui.reader.image.dualscreen
 import android.app.Presentation
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Bundle
@@ -29,7 +30,19 @@ actual fun rememberDualScreenState(pagedReaderState: PagedReaderState): DualScre
     remember(activity) { findSecondScreen(activity) } ?: return null
     val scope = rememberCoroutineScope()
     val state = remember(pagedReaderState) { DualScreenState(pagedReaderState, scope) }
-    DisposableEffect(state) { onDispose { state.dispose() } }
+    DisposableEffect(activity, state) {
+        // Held vertically, the reader turns its own content on both screens instead of letting
+        // Android rotate (and recreate) the activity.
+        val previousOrientation = activity.requestedOrientation
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        val sensor = OrientationSensor(activity) { turns -> state.setQuarterTurns(turns) }
+        sensor.start()
+        onDispose {
+            sensor.stop()
+            activity.requestedOrientation = previousOrientation
+            state.dispose()
+        }
+    }
     return state
 }
 

@@ -491,6 +491,7 @@ class PagedReaderState(
     }
 
     fun onLayoutChange(layout: PageDisplayLayout) {
+        layoutBeforeSinglePage = null
         this.layout.value = layout
         stateScope.launch { settingsRepository.putPagedReaderDisplayLayout(layout) }
 
@@ -498,6 +499,27 @@ class PagedReaderState(
         pageSpreads.value = buildSpreadMap(pages, layout)
 
         val currentPage = currentSpread.value.pages.first().metadata
+        loadPage(spreadIndexOf(currentPage))
+    }
+
+    private var layoutBeforeSinglePage: PageDisplayLayout? = null
+
+    /**
+     * Shows one page at a time without changing the saved layout setting, e.g. while a dual-screen
+     * device is held vertically. Turning it off restores the layout from before.
+     */
+    fun forceSinglePage(force: Boolean) {
+        val newLayout = if (force) {
+            if (layoutBeforeSinglePage != null || layout.value == SINGLE_PAGE) return
+            layoutBeforeSinglePage = layout.value
+            SINGLE_PAGE
+        } else {
+            layoutBeforeSinglePage?.also { layoutBeforeSinglePage = null } ?: return
+        }
+        layout.value = newLayout
+        val pages = readerState.booksState.value?.currentBookPages ?: return
+        pageSpreads.value = buildSpreadMap(pages, newLayout)
+        val currentPage = currentSpread.value.pages.firstOrNull()?.metadata ?: return
         loadPage(spreadIndexOf(currentPage))
     }
 

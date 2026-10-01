@@ -37,6 +37,9 @@ private const val ZOOM_STICK_RATE = 1.4f
 
 private const val MAX_ZOOM_LEVEL = 8f
 
+/** Starting zoom level when held vertically, where a fitted single page is already large. */
+private const val VERTICAL_ZOOM_LEVEL = 2f
+
 /** Set while the paged reader runs in dual-screen mode, so reader controls can offer its gestures. */
 val LocalDualScreenState = staticCompositionLocalOf<DualScreenState?> { null }
 
@@ -69,6 +72,16 @@ class DualScreenState(
     val loupeZoomLevel = MutableStateFlow(2.5f)
     val animationMillis = MutableStateFlow(120)
 
+    /**
+     * Clockwise quarter turns applied to both screens so they read upright: 0 held normally, 3 held
+     * vertically with the main screen on the right, 1 with it on the left.
+     */
+    val quarterTurns = MutableStateFlow(0)
+    private val vertical get() = quarterTurns.value % 2 != 0
+
+    /** Quick Zoom and Loupe levels for the orientation not in use; a single page needs less zoom. */
+    private var otherOrientationLevels = VERTICAL_ZOOM_LEVEL to VERTICAL_ZOOM_LEVEL
+
     private var focus = Offset(0.5f, 0.5f)
     private var touching = false
 
@@ -94,6 +107,35 @@ class DualScreenState(
 
     fun dispose() {
         pagedReaderState.spreadStartOverride = null
+        pagedReaderState.forceSinglePage(false)
+    }
+
+    // ---- Rotation ----
+
+    /** From the orientation sensor. Held vertically, the reader shows one page at a time. */
+    fun setQuarterTurns(turns: Int) {
+        if (turns == quarterTurns.value) return
+        val wasVertical = vertical
+        quarterTurns.value = turns
+        if (vertical == wasVertical) return
+
+        animation?.cancel()
+        rest = null
+        val levels = quickZoomLevel.value to loupeZoomLevel.value
+        quickZoomLevel.value = otherOrientationLevels.first
+        loupeZoomLevel.value = otherOrientationLevels.second
+        otherOrientationLevels = levels
+        pagedReaderState.forceSinglePage(vertical)
+    }
+
+    /**
+     * Turns a direction on the physical controls (D-pad, sticks), which rotate with the device,
+     * into the direction it points on the turned screens.
+     */
+    fun toScreenDirection(x: Float, y: Float): Offset = when (quarterTurns.value) {
+        1 -> Offset(y, -x)
+        3 -> Offset(-y, x)
+        else -> Offset(x, y)
     }
 
     // ---- Touch on the second screen ----

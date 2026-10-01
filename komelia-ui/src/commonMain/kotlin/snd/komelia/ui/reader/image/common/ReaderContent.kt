@@ -56,6 +56,7 @@ import snd.komelia.ui.reader.image.continuous.ContinuousReaderContent
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderState
 import snd.komelia.ui.reader.image.dualscreen.DualScreenHost
 import snd.komelia.ui.reader.image.dualscreen.LocalDualScreenState
+import snd.komelia.ui.reader.image.dualscreen.quarterTurns
 import snd.komelia.ui.reader.image.dualscreen.rememberDualScreenState
 import snd.komelia.ui.reader.image.paged.PagedReaderContent
 import snd.komelia.ui.reader.image.paged.PagedReaderState
@@ -108,9 +109,16 @@ fun ReaderContent(
     var hasFocus by remember { mutableStateOf(false) }
 
     BackPressHandler { if (showSettingsMenu) showSettingsMenu = false else onExit() }
+    // Dual-screen mode (a second screen, like the AYN Thor's) for the paged reader; turns the whole
+    // reader, menus included, when the device is held vertically.
+    val dualScreenState =
+        if (commonReaderState.readerType.collectAsState().value == PAGED) rememberDualScreenState(pagedReaderState)
+        else null
+    val quarterTurns = dualScreenState?.quarterTurns?.collectAsState()?.value ?: 0
     Box(
         Modifier
             .fillMaxSize()
+            .quarterTurns(quarterTurns)
             .onSizeChanged {
                 screenScaleState.setAreaSize(it)
             }
@@ -141,7 +149,6 @@ fun ReaderContent(
 
         when (commonReaderState.readerType.collectAsState().value) {
             PAGED -> {
-                val dualScreenState = rememberDualScreenState(pagedReaderState)
                 CompositionLocalProvider(LocalDualScreenState provides dualScreenState) {
                     PagedReaderContent(
                         showHelpDialog = showHelpDialog,
