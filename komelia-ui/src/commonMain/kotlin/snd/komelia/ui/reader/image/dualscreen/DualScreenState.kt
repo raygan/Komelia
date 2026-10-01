@@ -268,7 +268,7 @@ class DualScreenState(
 
     // ---- Modes ----
 
-    /** [at]: where to put the loupe, as a spread position; defaults to where the main reader is looking. */
+    /** [at]: where to put the loupe, as a spread position; defaults to where reading starts on the spread. */
     fun toggleMode(at: Offset? = null) {
         setMode(if (mode.value == ZoomMode.LOUPE) ZoomMode.QUICK_ZOOM else ZoomMode.LOUPE, at)
     }
@@ -279,7 +279,10 @@ class DualScreenState(
         rest = null
         when (newMode) {
             ZoomMode.LOUPE -> {
-                focus = at ?: viewCenter()
+                // Without a touched spot (a button or the settings menu), start where reading
+                // starts: the top left, or the top right for right-to-left. Edges clamp, so a
+                // corner lands exactly there.
+                focus = at ?: Offset(if (readsRightToLeft()) 1f else 0f, 0f)
                 animateView(toZoom = { zoomFor(loupeZoomLevel) }, toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel)) })
             }
             ZoomMode.QUICK_ZOOM -> animateView(toZoom = { zoomFor(1f) }, toOffset = { Offset.Zero })
