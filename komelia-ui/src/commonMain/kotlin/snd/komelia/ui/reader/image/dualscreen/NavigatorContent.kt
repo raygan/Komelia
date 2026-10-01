@@ -126,21 +126,38 @@ fun NavigatorContent(pagedReaderState: PagedReaderState, dualScreenState: DualSc
 
                         dualScreenState.touchDown(toSpread(down.position))
                         var up: PointerInputChange? = null
+                        // A second finger pinches the zoom level; after a pinch the remaining finger
+                        // doesn't move the view (it would jump), until all fingers lift.
+                        var pinchDistance: Float? = null
+                        var pinched = false
                         try {
                             while (true) {
                                 val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) {
-                                    up = change
+                                val pressed = event.changes.filter { it.pressed }
+                                if (pressed.isEmpty()) {
+                                    up = event.changes.firstOrNull { it.id == down.id }
                                     break
                                 }
-                                dualScreenState.touchMove(toSpread(change.position))
-                                change.consume()
+                                if (pressed.size >= 2) {
+                                    val a = pressed[0].position
+                                    val b = pressed[1].position
+                                    val distance = (a - b).getDistance()
+                                    val previous = pinchDistance
+                                    if (previous != null && previous > 0f) {
+                                        dualScreenState.pinch(distance / previous, toSpread((a + b) / 2f))
+                                    }
+                                    pinchDistance = distance
+                                    pinched = true
+                                } else {
+                                    pinchDistance = null
+                                    if (!pinched) dualScreenState.touchMove(toSpread(pressed[0].position))
+                                }
+                                event.changes.forEach { it.consume() }
                             }
                         } finally {
                             dualScreenState.touchUp()
                         }
-                        val isTap = up != null &&
+                        val isTap = !pinched && up != null &&
                             up.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis &&
                             (up.position - down.position).getDistance() < viewConfiguration.touchSlop
                         lastTap = if (isTap) up else null
