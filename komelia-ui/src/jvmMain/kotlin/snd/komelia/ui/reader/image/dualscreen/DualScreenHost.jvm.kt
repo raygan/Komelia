@@ -8,3 +8,6 @@ actual fun rememberDualScreenState(pagedReaderState: PagedReaderState): DualScre
 
 @Composable
 actual fun DualScreenHost(pagedReaderState: PagedReaderState, dualScreenState: DualScreenState) = Unit
+
+@Composable
+actual fun rememberDualScreenSettings(): DualScreenSettingsStore? = null

@@ -88,6 +88,7 @@ import snd.komelia.ui.common.components.SwitchWithLabel
 import snd.komelia.ui.platform.PlatformType
 import snd.komelia.ui.platform.cursorForHand
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderState
+import snd.komelia.ui.reader.image.dualscreen.DualScreenSettingsSection
 import snd.komelia.ui.reader.image.paged.PagedReaderState
 import snd.komelia.ui.reader.image.panels.PanelsReaderState
 import snd.komelia.ui.settings.imagereader.onnxruntime.DeviceSelector
@@ -457,6 +458,8 @@ private fun ColumnScope.PagedReaderSettingsContent(
                 contentPadding = PaddingValues(horizontal = 10.dp)
             )
         }
+
+        DualScreenSettingsSection()
     }
 }
 

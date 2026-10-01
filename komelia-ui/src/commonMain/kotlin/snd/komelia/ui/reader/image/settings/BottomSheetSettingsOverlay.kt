@@ -95,6 +95,7 @@ import snd.komelia.ui.common.components.SwitchWithLabel
 import snd.komelia.ui.platform.WindowSizeClass.COMPACT
 import snd.komelia.ui.platform.cursorForHand
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderState
+import snd.komelia.ui.reader.image.dualscreen.DualScreenSettingsSection
 import snd.komelia.ui.reader.image.paged.PagedReaderState
 import snd.komelia.ui.reader.image.panels.PanelsReaderState
 import snd.komelia.ui.strings.AppStrings
@@ -437,6 +438,7 @@ private fun PagedModeSettings(
             )
         }
 
+        DualScreenSettingsSection()
     }
 }
 

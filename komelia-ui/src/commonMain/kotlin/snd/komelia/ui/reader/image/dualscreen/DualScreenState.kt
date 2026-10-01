@@ -13,7 +13,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import snd.komelia.settings.model.PagedReadingDirection.RIGHT_TO_LEFT
@@ -29,16 +32,10 @@ private const val LOUPE_MOVE_MILLIS = 90
 /** How long a step through the page takes. */
 private const val STEP_MILLIS = 220
 
-/** Left stick at full tilt moves this many screenfuls per second. */
-private const val MOVE_STICK_RATE = 1.5f
-
 /** Right stick at full tilt roughly doubles the zoom level every half second. */
 private const val ZOOM_STICK_RATE = 1.4f
 
 private const val MAX_ZOOM_LEVEL = 8f
-
-/** Starting zoom level when held vertically, where a fitted single page is already large. */
-private const val VERTICAL_ZOOM_LEVEL = 2f
 
 /** Set while the paged reader runs in dual-screen mode, so reader controls can offer its gestures. */
 val LocalDualScreenState = staticCompositionLocalOf<DualScreenState?> { null }
@@ -60,17 +57,26 @@ enum class ZoomMode {
 class DualScreenState(
     private val pagedReaderState: PagedReaderState,
     private val scope: CoroutineScope,
+    private val settings: DualScreenSettingsStore,
 ) {
     private val scaleState: ScreenScaleState get() = pagedReaderState.screenScaleState
+    private val preferences get() = settings.preferences.value
 
-    val mode = MutableStateFlow(ZoomMode.QUICK_ZOOM)
+    val mode = MutableStateFlow(preferences.mode)
 
     /** Emits when the mode changes, so it can be announced. */
     val modeChanges = MutableSharedFlow<ZoomMode>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
-    val quickZoomLevel = MutableStateFlow(2.5f)
-    val loupeZoomLevel = MutableStateFlow(2.5f)
-    val animationMillis = MutableStateFlow(120)
+    /** Zoom levels for the way the device is held right now; a fitted single page needs less zoom. */
+    private var quickZoomLevel: Float
+        get() = if (vertical) preferences.quickZoomVertical else preferences.quickZoomLandscape
+        set(level) = settings.update { if (vertical) it.copy(quickZoomVertical = level) else it.copy(quickZoomLandscape = level) }
+
+    private var loupeZoomLevel: Float
+        get() = if (vertical) preferences.loupeZoomVertical else preferences.loupeZoomLandscape
+        set(level) = settings.update { if (vertical) it.copy(loupeZoomVertical = level) else it.copy(loupeZoomLandscape = level) }
+
+    private val animationMillis get() = preferences.animationMillis
 
     /**
      * Clockwise quarter turns applied to both screens so they read upright: 0 held normally, 3 held
@@ -78,9 +84,7 @@ class DualScreenState(
      */
     val quarterTurns = MutableStateFlow(0)
     private val vertical get() = quarterTurns.value % 2 != 0
-
-    /** Quick Zoom and Loupe levels for the orientation not in use; a single page needs less zoom. */
-    private var otherOrientationLevels = VERTICAL_ZOOM_LEVEL to VERTICAL_ZOOM_LEVEL
+    private var sensedQuarterTurns = 0
 
     private var focus = Offset(0.5f, 0.5f)
     private var touching = false
@@ -103,6 +107,16 @@ class DualScreenState(
             if (mode.value == ZoomMode.LOUPE) startZoomedIn(newScale, atEnd = startNextSpreadAtEnd)
             startNextSpreadAtEnd = false
         }
+        // Changes made in the settings menu.
+        settings.preferences.map { it.mode }.distinctUntilChanged().onEach { setMode(it) }.launchIn(scope)
+        settings.preferences.map { it.orientation }.distinctUntilChanged().onEach { applyQuarterTurns() }.launchIn(scope)
+
+        // Opening the reader in Loupe mode: zoom in once the first spread is laid out.
+        if (mode.value == ZoomMode.LOUPE) scope.launch {
+            pagedReaderState.currentSpread.first { it.pages.isNotEmpty() }
+            scaleState.areaSize.first { it.width > 0 }
+            startZoomedIn(scaleState, atEnd = false)
+        }
     }
 
     fun dispose() {
@@ -112,19 +126,23 @@ class DualScreenState(
 
     // ---- Rotation ----
 
-    /** From the orientation sensor. Held vertically, the reader shows one page at a time. */
-    fun setQuarterTurns(turns: Int) {
+    /** From the orientation sensor; used unless the orientation is fixed in settings. */
+    fun setSensedQuarterTurns(turns: Int) {
+        sensedQuarterTurns = turns
+        applyQuarterTurns()
+    }
+
+    /** Held vertically, the reader shows one page at a time. */
+    private fun applyQuarterTurns() {
+        val turns = preferences.orientation.quarterTurns ?: sensedQuarterTurns
         if (turns == quarterTurns.value) return
         val wasVertical = vertical
         quarterTurns.value = turns
+        settings.heldVertically.value = vertical
         if (vertical == wasVertical) return
 
         animation?.cancel()
         rest = null
-        val levels = quickZoomLevel.value to loupeZoomLevel.value
-        quickZoomLevel.value = otherOrientationLevels.first
-        loupeZoomLevel.value = otherOrientationLevels.second
-        otherOrientationLevels = levels
         pagedReaderState.forceSinglePage(vertical)
     }
 
@@ -146,13 +164,13 @@ class DualScreenState(
         when (mode.value) {
             ZoomMode.QUICK_ZOOM -> {
                 if (rest == null) rest = currentZoom() to currentOffset()
-                animateView(toZoom = { zoomFor(quickZoomLevel.value) }, toOffset = { offsetFor(focus, zoomFor(quickZoomLevel.value)) })
+                animateView(toZoom = { zoomFor(quickZoomLevel) }, toOffset = { offsetFor(focus, zoomFor(quickZoomLevel)) })
             }
             // Glide to the touched spot rather than jumping there.
             ZoomMode.LOUPE -> animateView(
-                toZoom = { zoomFor(loupeZoomLevel.value) },
-                toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel.value)) },
-                millis = minOf(animationMillis.value, LOUPE_MOVE_MILLIS),
+                toZoom = { zoomFor(loupeZoomLevel) },
+                toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel)) },
+                millis = minOf(animationMillis, LOUPE_MOVE_MILLIS),
             )
         }
     }
@@ -164,7 +182,7 @@ class DualScreenState(
         if (animation?.isActive == true) return
         when (mode.value) {
             ZoomMode.QUICK_ZOOM -> if (rest != null) {
-                val zoom = zoomFor(quickZoomLevel.value)
+                val zoom = zoomFor(quickZoomLevel)
                 scaleState.setZoomAndOffset(zoom, offsetFor(focus, zoom))
             }
             ZoomMode.LOUPE -> showLoupe()
@@ -188,13 +206,12 @@ class DualScreenState(
 
     fun setMode(newMode: ZoomMode, at: Offset? = null) {
         if (mode.value == newMode) return
-        mode.value = newMode
-        modeChanges.tryEmit(newMode)
+        changeMode(newMode)
         rest = null
         when (newMode) {
             ZoomMode.LOUPE -> {
                 focus = at ?: viewCenter()
-                animateView(toZoom = { zoomFor(loupeZoomLevel.value) }, toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel.value)) })
+                animateView(toZoom = { zoomFor(loupeZoomLevel) }, toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel)) })
             }
             ZoomMode.QUICK_ZOOM -> animateView(toZoom = { zoomFor(1f) }, toOffset = { Offset.Zero })
         }
@@ -211,24 +228,29 @@ class DualScreenState(
             ZoomMode.QUICK_ZOOM -> if (level > 1.05f) {
                 animation?.cancel()
                 rest = null
-                loupeZoomLevel.value = level
-                mode.value = ZoomMode.LOUPE
-                modeChanges.tryEmit(ZoomMode.LOUPE)
+                loupeZoomLevel = level
+                changeMode(ZoomMode.LOUPE)
             }
 
             ZoomMode.LOUPE -> if (level <= 1.02f) {
-                mode.value = ZoomMode.QUICK_ZOOM
-                modeChanges.tryEmit(ZoomMode.QUICK_ZOOM)
+                changeMode(ZoomMode.QUICK_ZOOM)
             } else {
-                loupeZoomLevel.value = level
+                loupeZoomLevel = level
             }
         }
+    }
+
+    /** Records a mode change: announced on the second screen and remembered for next time. */
+    private fun changeMode(newMode: ZoomMode) {
+        mode.value = newMode
+        modeChanges.tryEmit(newMode)
+        if (preferences.mode != newMode) settings.update { it.copy(mode = newMode) }
     }
 
     // ---- Main reader view ----
 
     private fun showLoupe() {
-        val zoom = zoomFor(loupeZoomLevel.value)
+        val zoom = zoomFor(loupeZoomLevel)
         scaleState.setZoomAndOffset(zoom, offsetFor(focus, zoom))
     }
 
@@ -237,7 +259,7 @@ class DualScreenState(
      * the bottom corner where it ends when stepping backwards.
      */
     private fun startZoomedIn(newScale: ScreenScaleState, atEnd: Boolean) {
-        val zoom = loupeZoomLevel.value * fullVisibilityZoom(newScale)
+        val zoom = loupeZoomLevel * fullVisibilityZoom(newScale)
         // Offsets past the edge are clamped, so these land exactly in a corner.
         val far = 1_000_000f
         val readsLeftToRight = pagedReaderState.readingDirection.value != RIGHT_TO_LEFT
@@ -276,9 +298,9 @@ class DualScreenState(
         if (next in stops.indices) {
             focus = stops[next]
             animateView(
-                toZoom = { zoomFor(loupeZoomLevel.value) },
-                toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel.value)) },
-                millis = if (animationMillis.value == 0) 0 else STEP_MILLIS,
+                toZoom = { zoomFor(loupeZoomLevel) },
+                toOffset = { offsetFor(focus, zoomFor(loupeZoomLevel)) },
+                millis = if (animationMillis == 0) 0 else STEP_MILLIS,
             )
         } else if (forward) {
             pagedReaderState.nextPage()
@@ -309,7 +331,7 @@ class DualScreenState(
         val ranges = aspects.map { aspect -> (x / total to (x + aspect) / total).also { x += aspect } }
         val readingOrder = if (readsRightToLeft()) ranges.map { (a, b) -> (1 - b) to (1 - a) } else ranges
 
-        val view = visibleFraction(zoomFor(loupeZoomLevel.value))
+        val view = visibleFraction(zoomFor(loupeZoomLevel))
         val stops = mutableListOf<Offset>()
         for ((left, right) in readingOrder) {
             val columns = centers(left, right, view.width).let { if (readsRightToLeft()) it.reversed() else it }
@@ -349,14 +371,14 @@ class DualScreenState(
             last = now
             // Squared response: small tilts for fine adjustment, full tilt to cross the page.
             if (zoomStick != 0f) {
-                loupeZoomLevel.value = (loupeZoomLevel.value * exp(-zoomStick * abs(zoomStick) * ZOOM_STICK_RATE * seconds))
+                loupeZoomLevel = (loupeZoomLevel * exp(-zoomStick * abs(zoomStick) * ZOOM_STICK_RATE * seconds))
                     .coerceIn(1f, MAX_ZOOM_LEVEL)
             }
-            val view = visibleFraction(zoomFor(loupeZoomLevel.value))
+            val view = visibleFraction(zoomFor(loupeZoomLevel))
             focus = clampFocus(
                 Offset(
-                    focus.x + stickX * abs(stickX) * view.width * MOVE_STICK_RATE * seconds,
-                    focus.y + stickY * abs(stickY) * view.height * MOVE_STICK_RATE * seconds,
+                    focus.x + stickX * abs(stickX) * view.width * preferences.stickSpeed * seconds,
+                    focus.y + stickY * abs(stickY) * view.height * preferences.stickSpeed * seconds,
                 ),
                 view,
             )
@@ -371,7 +393,7 @@ class DualScreenState(
     private fun animateView(
         toZoom: () -> Float,
         toOffset: () -> Offset,
-        millis: Int = animationMillis.value,
+        millis: Int = animationMillis,
         onEnd: () -> Unit = {},
     ) {
         animation?.cancel()

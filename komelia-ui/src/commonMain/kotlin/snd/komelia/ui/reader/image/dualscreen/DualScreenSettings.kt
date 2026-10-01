@@ -1,0 +1,48 @@
+package snd.komelia.ui.reader.image.dualscreen
+
+import androidx.compose.runtime.Composable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * Dual-screen settings. Kept in their own small store rather than Komelia's settings database, so
+ * this fork never adds database migrations that conflict with upstream's.
+ */
+data class DualScreenPreferences(
+    val mode: ZoomMode = ZoomMode.QUICK_ZOOM,
+    /** Zoom levels relative to the whole spread (or page, held vertically) fitting the screen. */
+    val quickZoomLandscape: Float = 2.5f,
+    val loupeZoomLandscape: Float = 2.5f,
+    val quickZoomVertical: Float = 2f,
+    val loupeZoomVertical: Float = 2f,
+    val animationMillis: Int = 120,
+    /** Screenfuls per second the left stick moves the Loupe at full tilt. */
+    val stickSpeed: Float = 1.5f,
+    val orientation: DualScreenOrientation = DualScreenOrientation.AUTO,
+)
+
+enum class DualScreenOrientation(
+    /** Fixed clockwise quarter turns for the screens' content, or null to follow how it's held. */
+    val quarterTurns: Int?,
+) {
+    AUTO(null),
+    LANDSCAPE(0),
+    VERTICAL_MAIN_SCREEN_RIGHT(3),
+    VERTICAL_MAIN_SCREEN_LEFT(1),
+}
+
+interface DualScreenSettingsStore {
+    /** Null until dual-screen mode first turns itself on; false once the user turns it off. */
+    val enabled: StateFlow<Boolean?>
+    val preferences: StateFlow<DualScreenPreferences>
+
+    /** Whether the device is currently held vertically, so settings can show the right zoom levels. */
+    val heldVertically: MutableStateFlow<Boolean>
+
+    fun setEnabled(enabled: Boolean)
+    fun update(transform: (DualScreenPreferences) -> DualScreenPreferences)
+}
+
+/** The settings store when the device has a second screen, or null without one. */
+@Composable
+expect fun rememberDualScreenSettings(): DualScreenSettingsStore?
