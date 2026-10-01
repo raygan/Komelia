@@ -1,5 +1,6 @@
 package snd.komelia.ui.reader.image.common
 
+import snd.komelia.ui.reader.image.dualscreen.DualScreenHost
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -143,6 +144,7 @@ fun ReaderContent(
                     pagedReaderState = pagedReaderState,
                     volumeKeysNavigation = volumeKeysNavigation
                 )
+                DualScreenHost(pagedReaderState)
             }
 
             CONTINUOUS -> {
