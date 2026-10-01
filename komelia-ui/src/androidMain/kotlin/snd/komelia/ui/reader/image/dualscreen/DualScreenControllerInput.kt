@@ -27,10 +27,11 @@ object DualScreenControllerInput {
     fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val state = target ?: return false
         val action: (() -> Unit) = when (event.keyCode) {
-            KeyEvent.KEYCODE_BUTTON_R1 -> state::stepNext
-            KeyEvent.KEYCODE_BUTTON_L1 -> state::stepPrevious
-            KeyEvent.KEYCODE_BUTTON_R2 -> state::turnNext
-            KeyEvent.KEYCODE_BUTTON_L2 -> state::turnPrevious
+            // Shoulder buttons point left and right, so for right-to-left reading they swap roles.
+            KeyEvent.KEYCODE_BUTTON_R1 -> state::stepRight
+            KeyEvent.KEYCODE_BUTTON_L1 -> state::stepLeft
+            KeyEvent.KEYCODE_BUTTON_R2 -> state::turnRight
+            KeyEvent.KEYCODE_BUTTON_L2 -> state::turnLeft
             KeyEvent.KEYCODE_DPAD_LEFT -> dpadAction(state, -1f, 0f) ?: return false
             KeyEvent.KEYCODE_DPAD_RIGHT -> dpadAction(state, 1f, 0f) ?: return false
             KeyEvent.KEYCODE_DPAD_UP -> dpadAction(state, 0f, -1f) ?: return false
@@ -91,11 +92,11 @@ object DualScreenControllerInput {
             val left = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE)) > 0.5f
             val right = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS)) > 0.5f
             if (left && !leftTriggerDown) {
-                state.turnPrevious()
+                state.turnLeft()
                 lastTriggerAxisTurn = event.eventTime
             }
             if (right && !rightTriggerDown) {
-                state.turnNext()
+                state.turnRight()
                 lastTriggerAxisTurn = event.eventTime
             }
             leftTriggerDown = left

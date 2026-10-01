@@ -352,6 +352,10 @@ class DualScreenState(
     fun turnLeft() = if (readsRightToLeft()) turnNext() else turnPrevious()
     fun turnRight() = if (readsRightToLeft()) turnPrevious() else turnNext()
 
+    /** Left and right shoulder buttons follow the page: for right-to-left reading, left goes forward. */
+    fun stepLeft() = if (readsRightToLeft()) stepNext() else stepPrevious()
+    fun stepRight() = if (readsRightToLeft()) stepPrevious() else stepNext()
+
     private fun readsRightToLeft() = pagedReaderState.readingDirection.value == RIGHT_TO_LEFT
 
     private fun step(forward: Boolean) {
