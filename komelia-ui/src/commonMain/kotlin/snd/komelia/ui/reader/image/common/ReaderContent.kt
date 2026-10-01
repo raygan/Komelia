@@ -239,7 +239,7 @@ fun ReaderControlsOverlay(
     val dualScreenState = LocalDualScreenState.current
     var pendingCenterTap by remember { mutableStateOf<Job?>(null) }
     val centerAction = { offset: Offset ->
-        if (dualScreenState == null) onSettingsMenuToggle()
+        if (dualScreenState == null || !dualScreenState.doubleTapSwitchesMode) onSettingsMenuToggle()
         else if (pendingCenterTap?.isActive == true) {
             pendingCenterTap?.cancel()
             dualScreenState.toggleMode(at = dualScreenState.spreadPositionAt(offset.x, offset.y))

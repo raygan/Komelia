@@ -19,6 +19,13 @@ data class DualScreenPreferences(
     /** Screenfuls per second the left stick moves the Loupe at full tilt. */
     val stickSpeed: Float = 1.5f,
     val orientation: DualScreenOrientation = DualScreenOrientation.AUTO,
+    /** Double-tapping either screen switches between Quick Zoom and Loupe. */
+    val doubleTapSwitchesMode: Boolean = true,
+    /**
+     * With double-tap on, how long a touch on the second screen must last before Quick Zoom starts,
+     * so the first tap of a double-tap doesn't zoom. Shorter is snappier; longer flickers less.
+     */
+    val tapDelayMillis: Int = 60,
 )
 
 enum class DualScreenOrientation(

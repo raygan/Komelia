@@ -95,6 +95,11 @@ class DualScreenState(
 
     private val animationMillis get() = preferences.animationMillis
 
+    val doubleTapSwitchesMode get() = preferences.doubleTapSwitchesMode
+
+    /** How long a touch must last before Quick Zoom starts: none unless taps need telling apart. */
+    val quickZoomHoldMillis get() = if (preferences.doubleTapSwitchesMode) preferences.tapDelayMillis.toLong() else 0L
+
     /**
      * Clockwise quarter turns applied to both screens so they read upright: 0 held normally, 3 held
      * vertically with the main screen on the right, 1 with it on the left.

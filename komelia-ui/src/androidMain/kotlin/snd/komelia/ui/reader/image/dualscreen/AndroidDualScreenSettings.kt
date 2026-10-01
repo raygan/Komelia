@@ -60,6 +60,8 @@ internal class AndroidDualScreenSettings private constructor(context: Context) :
             animationMillis = prefs.getInt("animationMillis", defaults.animationMillis),
             stickSpeed = prefs.getFloat("stickSpeed", defaults.stickSpeed),
             orientation = enumOrDefault(prefs.getString("orientation", null), defaults.orientation),
+            doubleTapSwitchesMode = prefs.getBoolean("doubleTapSwitchesMode", defaults.doubleTapSwitchesMode),
+            tapDelayMillis = prefs.getInt("tapDelayMillis", defaults.tapDelayMillis),
         )
     }
 
@@ -72,6 +74,8 @@ internal class AndroidDualScreenSettings private constructor(context: Context) :
         putInt("animationMillis", p.animationMillis)
         putFloat("stickSpeed", p.stickSpeed)
         putString("orientation", p.orientation.name)
+        putBoolean("doubleTapSwitchesMode", p.doubleTapSwitchesMode)
+        putInt("tapDelayMillis", p.tapDelayMillis)
     }
 
     private inline fun <reified T : Enum<T>> enumOrDefault(name: String?, default: T): T =
