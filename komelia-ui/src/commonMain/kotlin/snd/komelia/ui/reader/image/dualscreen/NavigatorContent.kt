@@ -16,8 +16,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,12 +37,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toOffset
 import androidx.compose.ui.unit.toSize
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.withTimeoutOrNull
 import snd.komelia.image.ReaderImage.PageId
 import snd.komelia.image.ReaderImageResult
 import snd.komelia.image.toImageBitmap
 import snd.komelia.settings.model.PagedReadingDirection.RIGHT_TO_LEFT
+import snd.komelia.ui.reader.image.PageMetadata
 import snd.komelia.ui.reader.image.paged.PagedReaderState
 import kotlin.math.roundToInt
 
@@ -59,18 +68,30 @@ fun NavigatorContent(pagedReaderState: PagedReaderState, dualScreenState: DualSc
     val readingDirection by pagedReaderState.readingDirection.collectAsState()
     // Redraw the outline whenever the main reader's zoom or position changes.
     pagedReaderState.screenScaleState.transformation.collectAsState().value
-    val cache = remember { NavigatorImageCache() }
+    val scope = rememberCoroutineScope()
+    val cache = remember { NavigatorImageCache(scope, pagedReaderState) }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
         val area = IntSize(constraints.maxWidth, constraints.maxHeight)
-        val pages = if (readingDirection == RIGHT_TO_LEFT) spread.pages.reversed() else spread.pages
+        fun visualOrder(pages: List<PageMetadata>) = if (readingDirection == RIGHT_TO_LEFT) pages.reversed() else pages
+        val pages = visualOrder(spread.pages.map { it.metadata })
         val layout = remember(pages, area) { layoutSpread(pages, area) }
 
-        val bitmaps by produceState(emptyMap<PageId, ImageBitmap>(), layout) {
-            value = layout.mapNotNull { placed -> cache.get(placed.pageId)?.let { placed.pageId to it } }.toMap()
-            for (placed in layout) {
-                val bitmap = cache.getOrLoad(placed) ?: continue
-                value = value + (placed.pageId to bitmap)
+        // Keep showing the previous spread until the new one is ready (briefly), then switch in one
+        // step, rather than showing placeholders and pages popping in one at a time.
+        var shown by remember { mutableStateOf(ShownSpread(emptyList(), emptyMap())) }
+        LaunchedEffect(layout) {
+            val jobs = layout.associateWith { cache.request(it) }
+            withTimeoutOrNull(SWAP_WAIT_MILLIS) { jobs.values.awaitAll() }
+            shown = ShownSpread(layout, jobs.readyBitmaps())
+            jobs.values.joinAll()
+            shown = ShownSpread(layout, jobs.readyBitmaps())
+
+            // Prepare the neighbouring spreads so turning the page is instant here too.
+            val index = pagedReaderState.currentSpreadIndex.value
+            for (neighbour in listOf(index + 1, index - 1)) {
+                val metadata = pagedReaderState.pageSpreads.value.getOrNull(neighbour) ?: continue
+                layoutSpread(visualOrder(metadata), area).forEach { cache.request(it) }
             }
         }
 
@@ -124,8 +145,8 @@ fun NavigatorContent(pagedReaderState: PagedReaderState, dualScreenState: DualSc
                     }
                 }
         ) {
-            for (placed in layout) {
-                val bitmap = bitmaps[placed.pageId]
+            for (placed in shown.layout) {
+                val bitmap = shown.bitmaps[placed]
                 if (bitmap == null) {
                     drawRect(placeholder, placed.offset.toOffset(), placed.size.toSize())
                 } else {
@@ -200,18 +221,23 @@ private fun DrawScope.drawOutline(spreadBox: Rect, visible: Rect) {
     drawRect(Color.White, outline.topLeft, outline.size, style = Stroke(width = 4f))
 }
 
-internal class PlacedPage(
-    val pageId: PageId,
-    val imageResult: ReaderImageResult?,
+internal data class PlacedPage(
+    val metadata: PageMetadata,
     val offset: IntOffset,
     val size: IntSize,
 )
 
+private class ShownSpread(val layout: List<PlacedPage>, val bitmaps: Map<PlacedPage, ImageBitmap>)
+
+@OptIn(ExperimentalCoroutinesApi::class)
+private fun Map<PlacedPage, Deferred<ImageBitmap?>>.readyBitmaps(): Map<PlacedPage, ImageBitmap> =
+    mapNotNull { (placed, job) -> if (job.isCompleted) job.getCompleted()?.let { placed to it } else null }.toMap()
+
 /** Puts the pages side by side at a common height and fits the row inside [area]. */
-private fun layoutSpread(pages: List<PagedReaderState.Page>, area: IntSize): List<PlacedPage> {
+private fun layoutSpread(pages: List<PageMetadata>, area: IntSize): List<PlacedPage> {
     if (pages.isEmpty() || area.width == 0 || area.height == 0) return emptyList()
     val aspects = pages.map { page ->
-        val size = page.metadata.size
+        val size = page.size
         if (size == null || size.height == 0) 0.7f else size.width.toFloat() / size.height
     }
     val spreadAspect = aspects.sum()
@@ -221,8 +247,7 @@ private fun layoutSpread(pages: List<PagedReaderState.Page>, area: IntSize): Lis
     return pages.mapIndexed { i, page ->
         val width = aspects[i] * height
         PlacedPage(
-            pageId = page.metadata.toPageId(),
-            imageResult = page.imageResult,
+            metadata = page,
             offset = IntOffset(x.roundToInt(), top),
             size = IntSize(width.roundToInt(), height.roundToInt()),
         ).also { x += width }
@@ -230,32 +255,51 @@ private fun layoutSpread(pages: List<PagedReaderState.Page>, area: IntSize): Lis
 }
 
 /**
- * Small copies of pages for the bottom screen. They come from the same processed image the top
- * screen uses (so crop and color correction match), shrunk once to the size they're drawn at.
+ * Small copies of pages for the bottom screen. They come from the same processed images the main
+ * reader uses (so crop and color correction match), shrunk once to the size they're drawn at.
+ * Pages are prepared in parallel, and a request for one that's already prepared or in progress
+ * shares the same job.
  */
-private class NavigatorImageCache {
-    // Insertion-ordered, so the first key is the least recently stored.
-    private val bitmaps = LinkedHashMap<PageId, ImageBitmap>()
+private class NavigatorImageCache(
+    private val scope: CoroutineScope,
+    private val pagedReaderState: PagedReaderState,
+) {
+    private data class Key(val pageId: PageId, val height: Int)
 
-    fun get(pageId: PageId): ImageBitmap? = bitmaps[pageId]
+    // Insertion-ordered, so the first key is the least recently requested.
+    private val jobs = LinkedHashMap<Key, Deferred<ImageBitmap?>>()
 
-    private fun put(pageId: PageId, bitmap: ImageBitmap) {
-        bitmaps.remove(pageId)
-        bitmaps[pageId] = bitmap
-        while (bitmaps.size > 8) bitmaps.remove(bitmaps.keys.first())
+    fun request(placed: PlacedPage): Deferred<ImageBitmap?> {
+        val key = Key(placed.metadata.toPageId(), placed.size.height)
+        jobs.remove(key)?.let { existing ->
+            // Keep it unless it failed (the page wasn't loaded yet), so it can be retried.
+            @OptIn(ExperimentalCoroutinesApi::class)
+            val failed = existing.isCompleted && existing.getCompleted() == null
+            if (!failed) {
+                jobs[key] = existing
+                return existing
+            }
+        }
+        val job = scope.async(Dispatchers.Default) { shrink(placed) }
+        jobs[key] = job
+        while (jobs.size > MAX_CACHED_PAGES) jobs.remove(jobs.keys.first())
+        return job
     }
 
-    suspend fun getOrLoad(placed: PlacedPage): ImageBitmap? {
-        bitmaps[placed.pageId]?.let { cached ->
-            if (cached.height >= placed.size.height) return cached
-        }
-        val readerImage = (placed.imageResult as? ReaderImageResult.Success)?.image ?: return null
+    private suspend fun shrink(placed: PlacedPage): ImageBitmap? {
+        val imageResult = pagedReaderState.cachedPage(placed.metadata)?.await()?.imageResult
+            ?: pagedReaderState.currentSpread.value.pages.firstOrNull { it.metadata == placed.metadata }?.imageResult
+        val readerImage = (imageResult as? ReaderImageResult.Success)?.image ?: return null
         // Owned by the ReaderImage: don't close it.
         val original = readerImage.getOriginalImage().getOrNull() ?: return null
         val targetHeight = placed.size.height.coerceAtLeast(1)
         val targetWidth = (original.width.toLong() * targetHeight / original.pageHeight).toInt().coerceAtLeast(1)
-        val bitmap = original.resize(targetWidth, targetHeight).use { it.toImageBitmap() }
-        put(placed.pageId, bitmap)
-        return bitmap
+        return original.resize(targetWidth, targetHeight).use { it.toImageBitmap() }
     }
 }
+
+/** How long to keep showing the previous spread while the new one is prepared. */
+private const val SWAP_WAIT_MILLIS = 250L
+
+/** The current spread, its neighbours, and a little history. */
+private const val MAX_CACHED_PAGES = 12

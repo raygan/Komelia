@@ -94,6 +94,9 @@ class PagedReaderState(
      */
     var spreadStartOverride: ((ScreenScaleState) -> Unit)? = null
 
+    /** A page that's loaded or loading (the current spread and its neighbours are preloaded), or null. */
+    fun cachedPage(page: PageMetadata): Deferred<Page>? = imageCache.get(page.toPageId())
+
     suspend fun initialize() {
         layout.value = settingsRepository.getPagedReaderDisplayLayout().first()
         scaleType.value = settingsRepository.getPagedReaderScaleType().first()
