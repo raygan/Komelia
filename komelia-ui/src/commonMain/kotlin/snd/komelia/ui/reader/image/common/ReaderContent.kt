@@ -1,11 +1,11 @@
 package snd.komelia.ui.reader.image.common
 
-import snd.komelia.ui.reader.image.dualscreen.DualScreenHost
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType.Companion.KeyUp
 import androidx.compose.ui.input.key.isAltPressed
@@ -34,6 +35,8 @@ import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.Res
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_continuous
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_paged
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_panels
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.rememberResourceEnvironment
@@ -51,6 +54,9 @@ import snd.komelia.ui.reader.image.ReaderState
 import snd.komelia.ui.reader.image.ScreenScaleState
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderContent
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderState
+import snd.komelia.ui.reader.image.dualscreen.DualScreenHost
+import snd.komelia.ui.reader.image.dualscreen.LocalDualScreenState
+import snd.komelia.ui.reader.image.dualscreen.rememberDualScreenState
 import snd.komelia.ui.reader.image.paged.PagedReaderContent
 import snd.komelia.ui.reader.image.paged.PagedReaderState
 import snd.komelia.ui.reader.image.panels.PanelsReaderContent
@@ -135,16 +141,19 @@ fun ReaderContent(
 
         when (commonReaderState.readerType.collectAsState().value) {
             PAGED -> {
-                PagedReaderContent(
-                    showHelpDialog = showHelpDialog,
-                    onShowHelpDialogChange = { showHelpDialog = it },
-                    showSettingsMenu = showSettingsMenu,
-                    onShowSettingsMenuChange = { showSettingsMenu = it },
-                    screenScaleState = screenScaleState,
-                    pagedReaderState = pagedReaderState,
-                    volumeKeysNavigation = volumeKeysNavigation
-                )
-                DualScreenHost(pagedReaderState)
+                val dualScreenState = rememberDualScreenState(pagedReaderState)
+                CompositionLocalProvider(LocalDualScreenState provides dualScreenState) {
+                    PagedReaderContent(
+                        showHelpDialog = showHelpDialog,
+                        onShowHelpDialogChange = { showHelpDialog = it },
+                        showSettingsMenu = showSettingsMenu,
+                        onShowSettingsMenuChange = { showSettingsMenu = it },
+                        screenScaleState = screenScaleState,
+                        pagedReaderState = pagedReaderState,
+                        volumeKeysNavigation = volumeKeysNavigation
+                    )
+                }
+                if (dualScreenState != null) DualScreenHost(pagedReaderState, dualScreenState)
             }
 
             CONTINUOUS -> {
@@ -218,7 +227,22 @@ fun ReaderControlsOverlay(
         else if (readingDirection == LayoutDirection.Ltr) coroutineScope.launch { onPrevPageClick() }
         else coroutineScope.launch { onNexPageClick() }
     }
-    val centerAction = { onSettingsMenuToggle() }
+    // In dual-screen mode a double-tap in the middle switches zoom modes, so a single tap has to
+    // wait briefly to be sure no second tap is coming before it opens the menu.
+    val dualScreenState = LocalDualScreenState.current
+    var pendingCenterTap by remember { mutableStateOf<Job?>(null) }
+    val centerAction = { offset: Offset ->
+        if (dualScreenState == null) onSettingsMenuToggle()
+        else if (pendingCenterTap?.isActive == true) {
+            pendingCenterTap?.cancel()
+            dualScreenState.toggleMode(at = dualScreenState.spreadPositionAt(offset.x, offset.y))
+        } else {
+            pendingCenterTap = coroutineScope.launch {
+                delay(DUAL_SCREEN_DOUBLE_TAP_MILLIS)
+                onSettingsMenuToggle()
+            }
+        }
+    }
     val rightAction = {
         if (isSettingsMenuOpen) onSettingsMenuToggle()
         else if (readingDirection == LayoutDirection.Ltr) coroutineScope.launch { onNexPageClick() }
@@ -239,7 +263,7 @@ fun ReaderControlsOverlay(
                     val actionWidth = contentAreaSize.width.toFloat() / 3
                     when (offset.x) {
                         in 0f..<actionWidth -> leftAction()
-                        in actionWidth..actionWidth * 2 -> centerAction()
+                        in actionWidth..actionWidth * 2 -> centerAction(offset)
                         else -> rightAction()
                     }
                 }
@@ -299,3 +323,5 @@ private fun ReaderTypeNotification(
         notifications.add(AppNotification.Normal(str))
     }
 }
+
+private const val DUAL_SCREEN_DOUBLE_TAP_MILLIS = 300L

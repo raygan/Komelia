@@ -88,6 +88,12 @@ class PagedReaderState(
     val scaleType = MutableStateFlow(LayoutScaleType.SCREEN)
     val readingDirection = MutableStateFlow(LEFT_TO_RIGHT)
 
+    /**
+     * Lets dual-screen mode choose where a newly loaded spread starts (zoomed in at the start of the
+     * spread, in Loupe mode) instead of the default fit. Called with the spread's scale before it's shown.
+     */
+    var spreadStartOverride: ((ScreenScaleState) -> Unit)? = null
+
     suspend fun initialize() {
         layout.value = settingsRepository.getPagedReaderDisplayLayout().first()
         scaleType.value = settingsRepository.getPagedReaderScaleType().first()
@@ -381,6 +387,7 @@ class PagedReaderState(
                 )
             )
         }
+        spreadStartOverride?.invoke(newScale)
         updateSpreadImageState(spread, newScale, readingDirection.value)
 
         return PagesLoadJob(spread, newScale)

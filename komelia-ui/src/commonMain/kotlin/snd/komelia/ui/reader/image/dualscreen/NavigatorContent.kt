@@ -4,13 +4,22 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -20,17 +29,22 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toOffset
 import androidx.compose.ui.unit.toSize
-import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import snd.komelia.image.ReaderImage.PageId
 import snd.komelia.image.ReaderImageResult
 import snd.komelia.image.toImageBitmap
 import snd.komelia.settings.model.PagedReadingDirection.RIGHT_TO_LEFT
 import snd.komelia.ui.reader.image.paged.PagedReaderState
+import kotlin.math.roundToInt
 
 private val placeholder = Color(0xFF1C1C1C)
 private val dim = Color.Black.copy(alpha = 0.55f)
@@ -72,20 +86,41 @@ fun NavigatorContent(pagedReaderState: PagedReaderState, dualScreenState: DualSc
                         ((position.x - spreadBox.left) / spreadBox.width).coerceIn(0f, 1f),
                         ((position.y - spreadBox.top) / spreadBox.height).coerceIn(0f, 1f),
                     )
+                    var lastTap: PointerInputChange? = null
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        val previous = lastTap
+                        val doubleTap = previous != null &&
+                            down.uptimeMillis - previous.uptimeMillis < viewConfiguration.doubleTapTimeoutMillis &&
+                            (down.position - previous.position).getDistance() < viewConfiguration.touchSlop * 4
+                        if (doubleTap) {
+                            // Switch modes and ignore the rest of this touch.
+                            lastTap = null
+                            dualScreenState.toggleMode(at = toSpread(down.position))
+                            waitForUpOrCancellation()
+                            return@awaitEachGesture
+                        }
+
                         dualScreenState.touchDown(toSpread(down.position))
+                        var up: PointerInputChange? = null
                         try {
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) break
+                                if (!change.pressed) {
+                                    up = change
+                                    break
+                                }
                                 dualScreenState.touchMove(toSpread(change.position))
                                 change.consume()
                             }
                         } finally {
                             dualScreenState.touchUp()
                         }
+                        val isTap = up != null &&
+                            up.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis &&
+                            (up.position - down.position).getDistance() < viewConfiguration.touchSlop
+                        lastTap = if (isTap) up else null
                     }
                 }
         ) {
@@ -104,7 +139,36 @@ fun NavigatorContent(pagedReaderState: PagedReaderState, dualScreenState: DualSc
             }
             if (visible != null && spreadBox != null) drawOutline(spreadBox, visible)
         }
+
+        ModeAnnouncement(dualScreenState)
     }
+}
+
+/** Briefly names the zoom mode after it changes. */
+@Composable
+private fun BoxScope.ModeAnnouncement(dualScreenState: DualScreenState) {
+    var shown by remember { mutableStateOf<ZoomMode?>(null) }
+    LaunchedEffect(dualScreenState) {
+        dualScreenState.modeChanges.collectLatest { mode ->
+            shown = mode
+            delay(1500)
+            shown = null
+        }
+    }
+    val mode = shown ?: return
+    Text(
+        text = when (mode) {
+            ZoomMode.QUICK_ZOOM -> "Quick Zoom"
+            ZoomMode.LOUPE -> "Loupe"
+        },
+        color = Color.White,
+        fontSize = 22.sp,
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 16.dp)
+            .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    )
 }
 
 private fun spreadBounds(layout: List<PlacedPage>): Rect? {

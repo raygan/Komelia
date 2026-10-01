@@ -22,13 +22,19 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import snd.komelia.ui.reader.image.paged.PagedReaderState
 
 @Composable
-actual fun DualScreenHost(pagedReaderState: PagedReaderState) {
+actual fun rememberDualScreenState(pagedReaderState: PagedReaderState): DualScreenState? {
+    val activity = LocalContext.current.findActivity() ?: return null
+    remember(activity) { findSecondScreen(activity) } ?: return null
+    val scope = rememberCoroutineScope()
+    val state = remember(pagedReaderState) { DualScreenState(pagedReaderState, scope) }
+    DisposableEffect(state) { onDispose { state.dispose() } }
+    return state
+}
+
+@Composable
+actual fun DualScreenHost(pagedReaderState: PagedReaderState, dualScreenState: DualScreenState) {
     val activity = LocalContext.current.findActivity() ?: return
     val display = remember(activity) { findSecondScreen(activity) } ?: return
-    val scope = rememberCoroutineScope()
-    val dualScreenState = remember(pagedReaderState) {
-        DualScreenState(pagedReaderState.screenScaleState, scope)
-    }
 
     DisposableEffect(activity, display, dualScreenState) {
         val presentation = NavigatorPresentation(activity, display) {

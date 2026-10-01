@@ -23,6 +23,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -220,12 +222,17 @@ class ScreenScaleState {
         }
     }
 
+    /** Emits after each zoom the user makes (pinch, ctrl+scroll), as opposed to zooms set by the app. */
+    val userZoomEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
     fun multiplyZoom(zoomMultiplier: Float, focus: Offset = Offset.Zero) {
         setZoom(zoom.value * zoomMultiplier, focus)
+        userZoomEvents.tryEmit(Unit)
     }
 
     fun addZoom(addZoom: Float, focus: Offset = Offset.Zero) {
         setZoom(zoom.value + addZoom, focus)
+        userZoomEvents.tryEmit(Unit)
     }
 
     fun setScrollState(scrollableState: ScrollableState?) {
