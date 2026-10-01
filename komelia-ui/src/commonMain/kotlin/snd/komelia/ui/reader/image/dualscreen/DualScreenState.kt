@@ -8,6 +8,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.toSize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import snd.komelia.image.ReaderImageResult
 import snd.komelia.settings.model.PagedReadingDirection.RIGHT_TO_LEFT
 import snd.komelia.ui.reader.image.ScreenScaleState
 import snd.komelia.ui.reader.image.paged.PagedReaderState
@@ -37,8 +40,8 @@ const val COVER_FADE_IN_MILLIS = 90L
 /** How long the screens take to fade back in after turning. */
 const val COVER_FADE_OUT_MILLIS = 160
 
-/** How long the reader has to stay unchanged after turning before the screens fade back in. */
-private const val SETTLE_CHECK_MILLIS = 100L
+/** How often to check whether the reader has finished re-laying out after turning. */
+private const val SETTLE_CHECK_MILLIS = 50L
 
 /** Never leave the screens covered longer than this, even if the page is slow to load. */
 private const val MAX_COVERED_MILLIS = 900L
@@ -177,18 +180,13 @@ class DualScreenState(
             }
 
             withTimeoutOrNull(MAX_COVERED_MILLIS) {
-                // The reader picks up its turned size, then reloads the page, sometimes more than
-                // once (layout change, then size change). Wait until it has stopped changing.
+                // The reader picks up its turned size and reloads the page, sometimes more than once
+                // (layout change, then size change); each page image then re-renders in the
+                // background, and its size on screen follows the rendered picture. Wait for that.
                 scaleState.areaSize.first { it.width > 0 && (it.width < it.height) == vertical }
-                var previous: Any? = null
-                while (true) {
-                    val spread = pagedReaderState.currentSpread.value
-                    val current = Triple(spread, scaleState.transformation.value, scaleState.targetSize.value)
-                    val loaded = spread.pages.isNotEmpty() && spread.pages.all { it.imageResult != null }
-                    if (loaded && current == previous) break
-                    previous = current
-                    delay(SETTLE_CHECK_MILLIS)
-                }
+                while (!pagesRenderedForScreen()) delay(SETTLE_CHECK_MILLIS)
+                // One more frame so the final picture is on screen before fading in.
+                delay(SETTLE_CHECK_MILLIS)
             }
             coverScreens.value = false
         }
@@ -314,6 +312,26 @@ class DualScreenState(
         val x = if (readsLeftToRight != atEnd) far else -far
         val y = if (atEnd) -far else far
         newScale.setZoomAndOffset(zoom, Offset(x, y))
+    }
+
+    /**
+     * Whether every page of the current spread has been rendered at the size the reader lays it
+     * out at for the current screen: each page gets an equal share of the width (Komelia's
+     * layout) and is fitted inside it, so its rendered size touches one side of that share.
+     */
+    private fun pagesRenderedForScreen(): Boolean {
+        val pages = pagedReaderState.currentSpread.value.pages
+        val area = scaleState.areaSize.value
+        if (pages.isEmpty() || area.width == 0) return false
+        val share = IntSize(area.width / pages.size, area.height)
+        return pages.all { page ->
+            val image = (page.imageResult as? ReaderImageResult.Success)?.image ?: return@all page.imageResult != null
+            val rendered = image.displaySize.value ?: return@all false
+            val painter = image.painter.value ?: return@all false
+            painter.intrinsicSize == rendered.toSize() &&
+                rendered.width <= share.width + 2 && rendered.height <= share.height + 2 &&
+                (abs(rendered.width - share.width) <= 2 || abs(rendered.height - share.height) <= 2)
+        }
     }
 
     // ---- Page controls ----
