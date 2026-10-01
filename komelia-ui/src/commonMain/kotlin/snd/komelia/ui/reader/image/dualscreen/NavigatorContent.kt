@@ -124,7 +124,32 @@ fun NavigatorContent(pagedReaderState: PagedReaderState, dualScreenState: DualSc
                             return@awaitEachGesture
                         }
 
-                        dualScreenState.touchDown(toSpread(down.position))
+                        // In Quick Zoom, wait a moment before zooming so a quick tap (the first half
+                        // of a double-tap) doesn't zoom in and straight back out. Dragging or a
+                        // second finger starts the zoom right away.
+                        var position = down.position
+                        var liftedEarly: PointerInputChange? = null
+                        if (dualScreenState.mode.value == ZoomMode.QUICK_ZOOM) {
+                            withTimeoutOrNull(QUICK_ZOOM_HOLD_MILLIS) {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (!change.pressed) {
+                                        liftedEarly = change
+                                        break
+                                    }
+                                    position = change.position
+                                    val moved = (position - down.position).getDistance() > viewConfiguration.touchSlop
+                                    if (moved || event.changes.count { it.pressed } > 1) break
+                                }
+                            }
+                        }
+                        liftedEarly?.let { tap ->
+                            lastTap = tap
+                            return@awaitEachGesture
+                        }
+
+                        dualScreenState.touchDown(toSpread(position))
                         var up: PointerInputChange? = null
                         // A second finger pinches the zoom level; after a pinch the remaining finger
                         // doesn't move the view (it would jump), until all fingers lift.
@@ -317,6 +342,9 @@ private class NavigatorImageCache(
         return original.resize(targetWidth, targetHeight).use { it.toImageBitmap() }
     }
 }
+
+/** In Quick Zoom, how long a touch has to last before zooming, so quick taps don't zoom. */
+private const val QUICK_ZOOM_HOLD_MILLIS = 120L
 
 /** How long to keep showing the previous spread while the new one is prepared. */
 private const val SWAP_WAIT_MILLIS = 250L
