@@ -249,6 +249,13 @@ class ScreenScaleState {
         applyLimits()
     }
 
+    /** Sets zoom and offset together, so listeners see one transformation change instead of two. */
+    fun setZoomAndOffset(zoom: Float, offset: Offset) {
+        this.zoom.value = zoom.coerceIn(zoomLimits.value)
+        this.currentOffset = offset
+        applyLimits()
+    }
+
     fun setOffset(offset: Offset) {
         currentOffset = offset
         applyLimits()

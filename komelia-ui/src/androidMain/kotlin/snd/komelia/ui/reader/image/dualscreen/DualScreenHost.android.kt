@@ -13,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -24,9 +25,15 @@ import snd.komelia.ui.reader.image.paged.PagedReaderState
 actual fun DualScreenHost(pagedReaderState: PagedReaderState) {
     val activity = LocalContext.current.findActivity() ?: return
     val display = remember(activity) { findSecondScreen(activity) } ?: return
+    val scope = rememberCoroutineScope()
+    val dualScreenState = remember(pagedReaderState) {
+        DualScreenState(pagedReaderState.screenScaleState, scope)
+    }
 
-    DisposableEffect(activity, display, pagedReaderState) {
-        val presentation = NavigatorPresentation(activity, display) { NavigatorContent(pagedReaderState) }
+    DisposableEffect(activity, display, dualScreenState) {
+        val presentation = NavigatorPresentation(activity, display) {
+            NavigatorContent(pagedReaderState, dualScreenState)
+        }
         presentation.show()
         onDispose { presentation.dismiss() }
     }
