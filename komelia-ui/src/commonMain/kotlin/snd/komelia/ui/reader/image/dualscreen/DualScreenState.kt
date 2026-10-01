@@ -37,6 +37,9 @@ const val COVER_FADE_IN_MILLIS = 90L
 /** How long the screens take to fade back in after turning. */
 const val COVER_FADE_OUT_MILLIS = 160
 
+/** How long the reader has to stay unchanged after turning before the screens fade back in. */
+private const val SETTLE_CHECK_MILLIS = 100L
+
 /** Never leave the screens covered longer than this, even if the page is slow to load. */
 private const val MAX_COVERED_MILLIS = 900L
 
@@ -174,14 +177,18 @@ class DualScreenState(
             }
 
             withTimeoutOrNull(MAX_COVERED_MILLIS) {
-                // The reader picks up its turned size, then reloads the page for it.
+                // The reader picks up its turned size, then reloads the page, sometimes more than
+                // once (layout change, then size change). Wait until it has stopped changing.
                 scaleState.areaSize.first { it.width > 0 && (it.width < it.height) == vertical }
-                delay(100)
-                pagedReaderState.currentSpread.first { spread ->
-                    spread.pages.isNotEmpty() && spread.pages.all { it.imageResult != null }
+                var previous: Any? = null
+                while (true) {
+                    val spread = pagedReaderState.currentSpread.value
+                    val current = Triple(spread, scaleState.transformation.value, scaleState.targetSize.value)
+                    val loaded = spread.pages.isNotEmpty() && spread.pages.all { it.imageResult != null }
+                    if (loaded && current == previous) break
+                    previous = current
+                    delay(SETTLE_CHECK_MILLIS)
                 }
-                // Let the page render at the new size.
-                delay(120)
             }
             coverScreens.value = false
         }
