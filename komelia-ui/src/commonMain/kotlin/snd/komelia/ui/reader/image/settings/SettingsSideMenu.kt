@@ -78,6 +78,7 @@ import snd.komelia.settings.model.PagedReadingDirection
 import snd.komelia.settings.model.ReaderFlashColor
 import snd.komelia.settings.model.ReaderType
 import snd.komelia.settings.model.ReaderType.CONTINUOUS
+import snd.komelia.settings.model.ReaderType.DUAL_SCREEN
 import snd.komelia.settings.model.ReaderType.PAGED
 import snd.komelia.settings.model.ReaderType.PANELS
 import snd.komelia.ui.LocalPlatform
@@ -89,6 +90,7 @@ import snd.komelia.ui.platform.PlatformType
 import snd.komelia.ui.platform.cursorForHand
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderState
 import snd.komelia.ui.reader.image.dualscreen.DualScreenSettingsSection
+import snd.komelia.ui.reader.image.dualscreen.rememberDualScreenSettings
 import snd.komelia.ui.reader.image.paged.PagedReaderState
 import snd.komelia.ui.reader.image.panels.PanelsReaderState
 import snd.komelia.ui.settings.imagereader.onnxruntime.DeviceSelector
@@ -179,7 +181,11 @@ fun SettingsSideMenuOverlay(
             Text(stringResource(Res.string.reader_zoom, zoomPercentage))
 
             Column {
-                val readerTypes = stringLabels(ReaderType.entries) { AppStrings.forReaderType(it) }
+                // Dual screen is only offered on devices with a second screen.
+                val dualScreenAvailable = rememberDualScreenSettings() != null
+                val readerTypes = stringLabels(ReaderType.entries.filter { it != DUAL_SCREEN || dualScreenAvailable }) {
+                    AppStrings.forReaderType(it)
+                }
                 DropdownChoiceMenu(
                     selectedOption = LabeledEntry(
                         readerType,
@@ -192,7 +198,8 @@ fun SettingsSideMenuOverlay(
                     inputFieldColor = MaterialTheme.colorScheme.surfaceVariant
                 )
                 when (readerType) {
-                    PAGED -> PagedReaderSettingsContent(pagedReaderState)
+                    PAGED -> PagedReaderSettingsContent(pagedReaderState, dualScreen = false)
+                    DUAL_SCREEN -> PagedReaderSettingsContent(pagedReaderState, dualScreen = true)
                     PANELS -> {
                         if (panelsReaderState != null) {
                             PanelsReaderSettingsContent(
@@ -297,7 +304,7 @@ fun SettingsSideMenuOverlay(
             }
             HorizontalDivider()
             when (readerType) {
-                PAGED -> {
+                PAGED, DUAL_SCREEN -> {
                     PagedReaderPagesInfo(
                         pages = pagedReaderState.currentSpread.collectAsState().value.pages,
                         modifier = Modifier.padding(start = 10.dp)
@@ -406,10 +413,12 @@ private fun ColumnScope.ContinuousReaderSettingsContent(state: ContinuousReaderS
 @Composable
 private fun ColumnScope.PagedReaderSettingsContent(
     pageState: PagedReaderState,
+    /** The dual-screen reader always fits the screen; its zoom modes take the place of scale types. */
+    dualScreen: Boolean,
 ) {
     val scaleType = pageState.scaleType.collectAsState().value
     Column {
-        DropdownChoiceMenu(
+        if (!dualScreen) DropdownChoiceMenu(
             selectedOption = LabeledEntry(
                 scaleType,
                 stringResource(AppStrings.forScaleType(scaleType))
@@ -459,7 +468,7 @@ private fun ColumnScope.PagedReaderSettingsContent(
             )
         }
 
-        DualScreenSettingsSection()
+        if (dualScreen) DualScreenSettingsSection()
     }
 }
 

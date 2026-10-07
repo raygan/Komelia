@@ -17,8 +17,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ComposeView
@@ -37,22 +35,15 @@ actual fun rememberDualScreenState(pagedReaderState: PagedReaderState): DualScre
     val activity = LocalContext.current.findActivity() ?: return null
     remember(activity) { findSecondScreen(activity) } ?: return null
     val settings = remember(activity) { AndroidDualScreenSettings.get(activity) }
-    val enabled by settings.enabled.collectAsState()
 
-    // The first time the reader opens on a dual-screen device, switch the mode on and say where to
-    // turn it off. Once turned off, it stays off.
-    if (enabled == null) {
-        LaunchedEffect(Unit) {
-            settings.setEnabled(true)
-            Toast.makeText(activity, FIRST_RUN_MESSAGE, Toast.LENGTH_LONG).show()
-            // Dual-screen reading is built around spreads; Komelia defaults to single pages.
-            pagedReaderState.pageSpreads.first { it.isNotEmpty() }
-            if (pagedReaderState.layout.value == PageDisplayLayout.SINGLE_PAGE) {
-                pagedReaderState.onLayoutChange(PageDisplayLayout.DOUBLE_PAGES)
-            }
+    // Dual-screen reading is built around spreads; Komelia defaults to single pages.
+    LaunchedEffect(pagedReaderState) {
+        pagedReaderState.pageSpreads.first { it.isNotEmpty() }
+        if (!settings.layoutChosen && pagedReaderState.layout.value == PageDisplayLayout.SINGLE_PAGE) {
+            pagedReaderState.onLayoutChange(PageDisplayLayout.DOUBLE_PAGES)
         }
+        settings.markLayoutChosen()
     }
-    if (enabled != true) return null
 
     val scope = rememberCoroutineScope()
     val state = remember(pagedReaderState) { DualScreenState(pagedReaderState, scope, settings) }
@@ -123,8 +114,21 @@ actual fun DualScreenHost(pagedReaderState: PagedReaderState, dualScreenState: D
     }
 }
 
+@Composable
+actual fun DualScreenFirstRun(onSelectDualScreen: () -> Unit) {
+    val activity = LocalContext.current.findActivity() ?: return
+    remember(activity) { findSecondScreen(activity) } ?: return
+    val settings = remember(activity) { AndroidDualScreenSettings.get(activity) }
+    LaunchedEffect(settings) {
+        if (settings.firstRunDone) return@LaunchedEffect
+        settings.markFirstRunDone()
+        onSelectDualScreen()
+        Toast.makeText(activity, FIRST_RUN_MESSAGE, Toast.LENGTH_LONG).show()
+    }
+}
+
 // Android cuts toasts off after two lines, so keep this short.
-private const val FIRST_RUN_MESSAGE = "Dual-screen reading on. Turn off in reader settings → Dual screen"
+private const val FIRST_RUN_MESSAGE = "Dual-screen reader on. Change it in reader settings → Reader type"
 
 /** The AYN Thor's bottom screen shows up as a presentation display separate from the activity's own. */
 internal fun findSecondScreen(activity: ComponentActivity): Display? {

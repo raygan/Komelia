@@ -29,15 +29,18 @@ internal class AndroidDualScreenSettings private constructor(context: Context) :
     private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pendingSave: Job? = null
 
-    override val enabled = MutableStateFlow(if (prefs.contains(ENABLED)) prefs.getBoolean(ENABLED, true) else null)
+    /** Whether the dual-screen reader has been selected automatically once already. */
+    val firstRunDone: Boolean get() = prefs.getBoolean(FIRST_RUN_DONE, false)
+
+    fun markFirstRunDone() = prefs.edit { putBoolean(FIRST_RUN_DONE, true) }
+
+    /** Whether double pages have been set up once already, so a later switch back to single pages sticks. */
+    val layoutChosen: Boolean get() = prefs.getBoolean(LAYOUT_CHOSEN, false)
+
+    fun markLayoutChosen() = prefs.edit { putBoolean(LAYOUT_CHOSEN, true) }
     override val preferences: StateFlow<DualScreenPreferences> get() = _preferences
     private val _preferences = MutableStateFlow(load())
     override val heldVertically = MutableStateFlow(false)
-
-    override fun setEnabled(enabled: Boolean) {
-        this.enabled.value = enabled
-        prefs.edit { putBoolean(ENABLED, enabled) }
-    }
 
     override fun update(transform: (DualScreenPreferences) -> DualScreenPreferences) {
         _preferences.update(transform)
@@ -82,7 +85,9 @@ internal class AndroidDualScreenSettings private constructor(context: Context) :
         enumValues<T>().firstOrNull { it.name == name } ?: default
 
     companion object {
-        private const val ENABLED = "enabled"
+        // Separate from the old "enabled" switch, which choosing the reader type replaced.
+        private const val FIRST_RUN_DONE = "dualScreenReaderAutoSelected"
+        private const val LAYOUT_CHOSEN = "dualScreenLayoutChosen"
 
         @Volatile
         private var instance: AndroidDualScreenSettings? = null

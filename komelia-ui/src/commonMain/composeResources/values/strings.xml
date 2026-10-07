@@ -420,6 +420,7 @@
     <string name="reader_zoom">Zoom: %1$s%</string>
     <string name="reader_type">Reader type</string>
     <string name="reader_type_paged">Paged</string>
+    <string name="reader_type_dual_screen">Dual screen</string>
     <string name="reader_type_panels">Panels</string>
     <string name="reader_type_continuous">Continuous</string>
     <string name="reader_settings_reading_mode">Reading mode</string>

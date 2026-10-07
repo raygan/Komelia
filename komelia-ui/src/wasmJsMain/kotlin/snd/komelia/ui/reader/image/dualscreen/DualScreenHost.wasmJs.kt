@@ -11,3 +11,6 @@ actual fun DualScreenHost(pagedReaderState: PagedReaderState, dualScreenState: D
 
 @Composable
 actual fun rememberDualScreenSettings(): DualScreenSettingsStore? = null
+
+@Composable
+actual fun DualScreenFirstRun(onSelectDualScreen: () -> Unit) = Unit

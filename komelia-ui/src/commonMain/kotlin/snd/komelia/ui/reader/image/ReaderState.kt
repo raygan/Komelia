@@ -127,11 +127,14 @@ class ReaderState(
 
             val currentSeries = seriesApi.getOneSeries(newBook.seriesId)
             series.value = currentSeries
+            val savedReaderType = readerSettingsRepository.getReaderType().first()
+            // Dual screen is paged reading, so it stands in for the paged reader where a series asks for it.
+            val pagedReaderType = if (savedReaderType == ReaderType.DUAL_SCREEN) ReaderType.DUAL_SCREEN else ReaderType.PAGED
             readerType.value = when (currentSeries.metadata.readingDirection) {
-                KomgaReadingDirection.LEFT_TO_RIGHT -> ReaderType.PAGED
-                KomgaReadingDirection.RIGHT_TO_LEFT -> ReaderType.PAGED
+                KomgaReadingDirection.LEFT_TO_RIGHT -> pagedReaderType
+                KomgaReadingDirection.RIGHT_TO_LEFT -> pagedReaderType
                 KomgaReadingDirection.WEBTOON -> ReaderType.CONTINUOUS
-                KomgaReadingDirection.VERTICAL, null -> readerSettingsRepository.getReaderType().first()
+                KomgaReadingDirection.VERTICAL, null -> savedReaderType
             }
 
             state.value = LoadState.Success(Unit)

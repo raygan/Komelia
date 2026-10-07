@@ -31,6 +31,7 @@ import snd.komelia.image.ReaderImage
 import snd.komelia.settings.model.ContinuousReadingDirection
 import snd.komelia.settings.model.PagedReadingDirection
 import snd.komelia.settings.model.ReaderType.CONTINUOUS
+import snd.komelia.settings.model.ReaderType.DUAL_SCREEN
 import snd.komelia.settings.model.ReaderType.PAGED
 import snd.komelia.settings.model.ReaderType.PANELS
 import snd.komelia.ui.LocalPlatform
@@ -158,7 +159,7 @@ fun BoxScope.SettingsOverlay(
         )
     }
     when (readerType) {
-        PAGED -> {
+        PAGED, DUAL_SCREEN -> {
             val readingDirection = pagedReaderState.readingDirection.collectAsState().value
             val layoutDirection = remember(readingDirection) {
                 when (readingDirection) {

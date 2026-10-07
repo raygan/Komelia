@@ -33,7 +33,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.Res
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_continuous
-import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_paged
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_panels
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,6 +41,7 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.rememberResourceEnvironment
 import snd.komelia.AppNotification
 import snd.komelia.settings.model.ReaderType.CONTINUOUS
+import snd.komelia.settings.model.ReaderType.DUAL_SCREEN
 import snd.komelia.settings.model.ReaderType.PAGED
 import snd.komelia.settings.model.ReaderType.PANELS
 import snd.komelia.ui.LocalNotifications
@@ -54,6 +54,7 @@ import snd.komelia.ui.reader.image.ReaderState
 import snd.komelia.ui.reader.image.ScreenScaleState
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderContent
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderState
+import snd.komelia.ui.reader.image.dualscreen.DualScreenFirstRun
 import snd.komelia.ui.reader.image.dualscreen.DualScreenHost
 import snd.komelia.ui.reader.image.dualscreen.LocalDualScreenState
 import snd.komelia.ui.reader.image.dualscreen.quarterTurns
@@ -111,8 +112,9 @@ fun ReaderContent(
     BackPressHandler { if (showSettingsMenu) showSettingsMenu = false else onExit() }
     // Dual-screen mode (a second screen, like the AYN Thor's) for the paged reader; turns the whole
     // reader, menus included, when the device is held vertically.
+    DualScreenFirstRun(onSelectDualScreen = { commonReaderState.onReaderTypeChange(DUAL_SCREEN) })
     val dualScreenState =
-        if (commonReaderState.readerType.collectAsState().value == PAGED) rememberDualScreenState(pagedReaderState)
+        if (commonReaderState.readerType.collectAsState().value == DUAL_SCREEN) rememberDualScreenState(pagedReaderState)
         else null
     val quarterTurns = dualScreenState?.quarterTurns?.collectAsState()?.value ?: 0
     Box(
@@ -148,7 +150,7 @@ fun ReaderContent(
         }
 
         when (commonReaderState.readerType.collectAsState().value) {
-            PAGED -> {
+            PAGED, DUAL_SCREEN -> {
                 CompositionLocalProvider(LocalDualScreenState provides dualScreenState) {
                     PagedReaderContent(
                         showHelpDialog = showHelpDialog,
@@ -293,8 +295,8 @@ private fun ReaderTypeNotification(
 
     LaunchedEffect(Unit) {
         val str = when (commonReaderState.readerType.value) {
-            PAGED -> buildString {
-                append(getString(environment, Res.string.reader_type_paged))
+            PAGED, DUAL_SCREEN -> buildString {
+                append(getString(environment, AppStrings.forReaderType(commonReaderState.readerType.value)))
                 append("\n")
                 append(
                     getString(

@@ -133,6 +133,8 @@ class DualScreenState(
 
     init {
         scaleState.userZoomEvents.onEach { onUserZoom() }.launchIn(scope)
+        // Zoom modes take the place of scale types: always fit the whole spread.
+        pagedReaderState.forceScreenScale(true)
         pagedReaderState.spreadStartOverride = { newScale ->
             if (mode.value == ZoomMode.LOUPE) startZoomedIn(newScale, atEnd = startNextSpreadAtEnd)
             startNextSpreadAtEnd = false
@@ -152,6 +154,7 @@ class DualScreenState(
     fun dispose() {
         pagedReaderState.spreadStartOverride = null
         pagedReaderState.forceSinglePage(false)
+        pagedReaderState.forceScreenScale(false)
     }
 
     // ---- Rotation ----

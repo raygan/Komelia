@@ -28,6 +28,7 @@ import snd.komelia.komga.api.KomgaSeriesApi
 import snd.komelia.onnxruntime.OnnxRuntime
 import snd.komelia.settings.ImageReaderSettingsRepository
 import snd.komelia.settings.model.ReaderType.CONTINUOUS
+import snd.komelia.settings.model.ReaderType.DUAL_SCREEN
 import snd.komelia.settings.model.ReaderType.PAGED
 import snd.komelia.settings.model.ReaderType.PANELS
 import snd.komelia.ui.BookSiblingsContext
@@ -137,7 +138,7 @@ class ReaderViewModel(
         readerState.readerType.onEach {
             stopAllReaderModeStates()
             when (it) {
-                PAGED -> pagedReaderState.initialize()
+                PAGED, DUAL_SCREEN -> pagedReaderState.initialize()
                 CONTINUOUS -> continuousReaderState.initialize()
                 PANELS -> {
                     if (panelsReaderState == null) {

@@ -92,6 +92,7 @@ import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_paged_sc
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_paged_scale_original
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_paged_scale_screen
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_continuous
+import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_dual_screen
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_paged
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_panels
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.series_book_filter_read_status_inprogress
@@ -319,6 +320,7 @@ data object AppStrings {
             ReaderType.PAGED -> Res.string.reader_type_paged
             ReaderType.PANELS -> Res.string.reader_type_panels
             ReaderType.CONTINUOUS -> Res.string.reader_type_continuous
+            ReaderType.DUAL_SCREEN -> Res.string.reader_type_dual_screen
         }
     }
 

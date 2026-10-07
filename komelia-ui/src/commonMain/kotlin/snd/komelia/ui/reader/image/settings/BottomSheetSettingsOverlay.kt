@@ -72,6 +72,7 @@ import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_settings
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_settings_reading_mode
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_continuous
+import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_dual_screen
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_paged
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_type_panels
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.reader_zoom
@@ -87,6 +88,7 @@ import snd.komelia.settings.model.PagedReadingDirection
 import snd.komelia.settings.model.ReaderFlashColor
 import snd.komelia.settings.model.ReaderType
 import snd.komelia.settings.model.ReaderType.CONTINUOUS
+import snd.komelia.settings.model.ReaderType.DUAL_SCREEN
 import snd.komelia.settings.model.ReaderType.PAGED
 import snd.komelia.settings.model.ReaderType.PANELS
 import snd.komelia.ui.LocalWindowWidth
@@ -96,6 +98,7 @@ import snd.komelia.ui.platform.WindowSizeClass.COMPACT
 import snd.komelia.ui.platform.cursorForHand
 import snd.komelia.ui.reader.image.continuous.ContinuousReaderState
 import snd.komelia.ui.reader.image.dualscreen.DualScreenSettingsSection
+import snd.komelia.ui.reader.image.dualscreen.rememberDualScreenSettings
 import snd.komelia.ui.reader.image.paged.PagedReaderState
 import snd.komelia.ui.reader.image.panels.PanelsReaderState
 import snd.komelia.ui.strings.AppStrings
@@ -303,6 +306,12 @@ private fun BottomSheetReadingModeSettings(
                 onClick = { onReaderTypeChange(PAGED) },
                 label = { Text(stringResource(Res.string.reader_type_paged)) }
             )
+            // Dual screen is only offered on devices with a second screen.
+            if (rememberDualScreenSettings() != null) InputChip(
+                selected = readerType == DUAL_SCREEN,
+                onClick = { onReaderTypeChange(DUAL_SCREEN) },
+                label = { Text(stringResource(Res.string.reader_type_dual_screen)) }
+            )
             InputChip(
                 selected = readerType == CONTINUOUS,
                 onClick = { onReaderTypeChange(CONTINUOUS) },
@@ -317,7 +326,8 @@ private fun BottomSheetReadingModeSettings(
         }
 
         when (readerType) {
-            PAGED -> PagedModeSettings(pageState = pagedReaderState)
+            PAGED -> PagedModeSettings(pageState = pagedReaderState, dualScreen = false)
+            DUAL_SCREEN -> PagedModeSettings(pageState = pagedReaderState, dualScreen = true)
             PANELS -> if (panelsReaderState != null) PanelsModeSettings(state = panelsReaderState)
             CONTINUOUS -> ContinuousModeSettings(state = continuousReaderState)
         }
@@ -327,12 +337,14 @@ private fun BottomSheetReadingModeSettings(
 @Composable
 private fun PagedModeSettings(
     pageState: PagedReaderState,
+    /** The dual-screen reader always fits the screen; its zoom modes take the place of scale types. */
+    dualScreen: Boolean,
 ) {
     val scaleType = pageState.scaleType.collectAsState().value
     Column {
 
-        Text(stringResource(Res.string.reader_paged_scale_type))
-        FlowRow(
+        if (!dualScreen) Text(stringResource(Res.string.reader_paged_scale_type))
+        if (!dualScreen) FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             InputChip(
@@ -438,7 +450,7 @@ private fun PagedModeSettings(
             )
         }
 
-        DualScreenSettingsSection()
+        if (dualScreen) DualScreenSettingsSection()
     }
 }
 
@@ -612,7 +624,7 @@ private fun BottomSheetImageSettings(
         val zoomPercentage = remember(zoom) { (zoom * 100).roundToInt() }
         Text(stringResource(Res.string.reader_zoom, zoomPercentage))
         when (readerType) {
-            PAGED ->
+            PAGED, DUAL_SCREEN ->
                 PagedReaderPagesInfo(
                     pages = pagedReaderState.currentSpread.collectAsState().value.pages,
                     modifier = Modifier.animateContentSize()

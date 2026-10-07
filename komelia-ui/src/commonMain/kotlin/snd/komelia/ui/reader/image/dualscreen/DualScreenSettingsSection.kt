@@ -44,78 +44,65 @@ private val orientations = listOf(
 @Composable
 fun DualScreenSettingsSection() {
     val settings = rememberDualScreenSettings() ?: return
-    val enabled by settings.enabled.collectAsState()
     val preferences by settings.preferences.collectAsState()
     val vertical by settings.heldVertically.collectAsState()
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("Dual screen", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 10.dp))
+        Choice("Zoom mode (L3/R3 or double-tap switches)", preferences.mode, modes) { mode ->
+            settings.update { it.copy(mode = mode) }
+        }
+
+        val heldHow = if (vertical) " (held vertically)" else ""
+        ZoomLevelSlider("Quick Zoom level$heldHow", if (vertical) preferences.quickZoomVertical else preferences.quickZoomLandscape) { level ->
+            settings.update { if (vertical) it.copy(quickZoomVertical = level) else it.copy(quickZoomLandscape = level) }
+        }
+        ZoomLevelSlider("Loupe level$heldHow (also pinch, or right stick)", if (vertical) preferences.loupeZoomVertical else preferences.loupeZoomLandscape) { level ->
+            settings.update { if (vertical) it.copy(loupeZoomVertical = level) else it.copy(loupeZoomLandscape = level) }
+        }
+
+        Choice("Zoom animation", preferences.animationMillis, animations) { millis ->
+            settings.update { it.copy(animationMillis = millis) }
+        }
+        Choice("Left stick speed (Loupe)", preferences.stickSpeed, stickSpeeds) { speed ->
+            settings.update { it.copy(stickSpeed = speed) }
+        }
+        Choice("Orientation", preferences.orientation, orientations) { orientation ->
+            settings.update { it.copy(orientation = orientation) }
+        }
+
         SwitchWithLabel(
-            checked = enabled == true,
-            onCheckedChange = settings::setEnabled,
-            label = { Text("Use the second screen to zoom") },
-            supportingText = { Text("Shows the whole spread on the second screen; touch it to zoom the main screen") },
+            checked = preferences.doubleTapSwitchesMode,
+            onCheckedChange = { on -> settings.update { it.copy(doubleTapSwitchesMode = on) } },
+            label = { Text("Double-tap switches zoom mode") },
+            supportingText = {
+                Text("On either screen. Turn off for instant zooming, and an instant menu tap in the middle of the main screen")
+            },
             contentPadding = PaddingValues(horizontal = 10.dp),
         )
-
-        AnimatedVisibility(visible = enabled == true) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Choice("Zoom mode (L3/R3 or double-tap switches)", preferences.mode, modes) { mode ->
-                    settings.update { it.copy(mode = mode) }
-                }
-
-                val heldHow = if (vertical) " (held vertically)" else ""
-                ZoomLevelSlider("Quick Zoom level$heldHow", if (vertical) preferences.quickZoomVertical else preferences.quickZoomLandscape) { level ->
-                    settings.update { if (vertical) it.copy(quickZoomVertical = level) else it.copy(quickZoomLandscape = level) }
-                }
-                ZoomLevelSlider("Loupe level$heldHow (also pinch, or right stick)", if (vertical) preferences.loupeZoomVertical else preferences.loupeZoomLandscape) { level ->
-                    settings.update { if (vertical) it.copy(loupeZoomVertical = level) else it.copy(loupeZoomLandscape = level) }
-                }
-
-                Choice("Zoom animation", preferences.animationMillis, animations) { millis ->
-                    settings.update { it.copy(animationMillis = millis) }
-                }
-                Choice("Left stick speed (Loupe)", preferences.stickSpeed, stickSpeeds) { speed ->
-                    settings.update { it.copy(stickSpeed = speed) }
-                }
-                Choice("Orientation", preferences.orientation, orientations) { orientation ->
-                    settings.update { it.copy(orientation = orientation) }
-                }
-
-                SwitchWithLabel(
-                    checked = preferences.doubleTapSwitchesMode,
-                    onCheckedChange = { on -> settings.update { it.copy(doubleTapSwitchesMode = on) } },
-                    label = { Text("Double-tap switches zoom mode") },
-                    supportingText = {
-                        Text("On either screen. Turn off for instant zooming, and an instant menu tap in the middle of the main screen")
-                    },
-                    contentPadding = PaddingValues(horizontal = 10.dp),
+        AnimatedVisibility(visible = preferences.doubleTapSwitchesMode) {
+            Column(Modifier.padding(horizontal = 10.dp)) {
+                Text("Delay before Quick Zoom starts", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "So a quick tap can start a double-tap without zooming. Shorter feels snappier; longer avoids a zoom flicker when double-tapping.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                AnimatedVisibility(visible = preferences.doubleTapSwitchesMode) {
-                    Column(Modifier.padding(horizontal = 10.dp)) {
-                        Text("Delay before Quick Zoom starts", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "So a quick tap can start a double-tap without zooming. Shorter feels snappier; longer avoids a zoom flicker when double-tapping.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Row(Modifier.selectableGroup()) {
-                            for ((millis, label) in tapDelays) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .selectable(
-                                            selected = preferences.tapDelayMillis == millis,
-                                            onClick = { settings.update { it.copy(tapDelayMillis = millis) } },
-                                            role = Role.RadioButton,
-                                        )
-                                        .padding(end = 16.dp),
-                                ) {
-                                    RadioButton(selected = preferences.tapDelayMillis == millis, onClick = null)
-                                    Text(label)
-                                }
-                            }
+                Row(Modifier.selectableGroup()) {
+                    for ((millis, label) in tapDelays) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .selectable(
+                                    selected = preferences.tapDelayMillis == millis,
+                                    onClick = { settings.update { it.copy(tapDelayMillis = millis) } },
+                                    role = Role.RadioButton,
+                                )
+                                .padding(end = 16.dp),
+                        ) {
+                            RadioButton(selected = preferences.tapDelayMillis == millis, onClick = null)
+                            Text(label)
                         }
                     }
                 }

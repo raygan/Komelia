@@ -94,6 +94,19 @@ class PagedReaderState(
      */
     var spreadStartOverride: ((ScreenScaleState) -> Unit)? = null
 
+    /**
+     * The dual-screen reader always fits the screen (its zoom modes take the place of scale types)
+     * without changing the saved scale type the paged reader uses.
+     */
+    fun forceScreenScale(force: Boolean) {
+        if (forcedScreenScale == force) return
+        forcedScreenScale = force
+        val currentPage = currentSpread.value.pages.firstOrNull()?.metadata ?: return
+        loadPage(spreadIndexOf(currentPage))
+    }
+
+    private var forcedScreenScale = false
+
     /** A page that's loaded or loading (the current spread and its neighbours are preloaded), or null. */
     fun cachedPage(page: PageMetadata): Deferred<Page>? = imageCache.get(page.toPageId())
 
@@ -370,7 +383,7 @@ class PagedReaderState(
             pages,
             areaSize = containerSize,
             maxPageSize = maxPageSize,
-            scaleType = scaleType.value,
+            scaleType = if (forcedScreenScale) LayoutScaleType.SCREEN else scaleType.value,
             displayLayout = layout.value,
             stretchToFit = readerState.imageStretchToFit.value
         )

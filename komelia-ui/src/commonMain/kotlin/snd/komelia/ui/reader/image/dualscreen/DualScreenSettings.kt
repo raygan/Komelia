@@ -39,17 +39,22 @@ enum class DualScreenOrientation(
 }
 
 interface DualScreenSettingsStore {
-    /** Null until dual-screen mode first turns itself on; false once the user turns it off. */
-    val enabled: StateFlow<Boolean?>
     val preferences: StateFlow<DualScreenPreferences>
 
     /** Whether the device is currently held vertically, so settings can show the right zoom levels. */
     val heldVertically: MutableStateFlow<Boolean>
 
-    fun setEnabled(enabled: Boolean)
     fun update(transform: (DualScreenPreferences) -> DualScreenPreferences)
 }
 
 /** The settings store when the device has a second screen, or null without one. */
 @Composable
 expect fun rememberDualScreenSettings(): DualScreenSettingsStore?
+
+/**
+ * The first time an image reader opens on a device with a second screen, switches to the
+ * dual-screen reader ([onSelectDualScreen]) and says where to change it. Only ever once, so
+ * choosing another reader type sticks.
+ */
+@Composable
+expect fun DualScreenFirstRun(onSelectDualScreen: () -> Unit)
