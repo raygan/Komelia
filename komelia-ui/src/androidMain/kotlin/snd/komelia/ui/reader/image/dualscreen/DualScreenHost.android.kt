@@ -23,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
@@ -60,8 +62,17 @@ actual fun rememberDualScreenState(pagedReaderState: PagedReaderState): DualScre
         val previousOrientation = activity.requestedOrientation
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         val sensor = OrientationSensor(activity) { turns -> state.setSensedQuarterTurns(turns) }
-        sensor.start()
+        // Only while the app is on screen; no need to read the accelerometer in the background.
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> sensor.start()
+                Lifecycle.Event.ON_STOP -> sensor.stop()
+                else -> Unit
+            }
+        }
+        activity.lifecycle.addObserver(observer)
         onDispose {
+            activity.lifecycle.removeObserver(observer)
             sensor.stop()
             activity.requestedOrientation = previousOrientation
             state.dispose()
@@ -77,15 +88,37 @@ actual fun DualScreenHost(pagedReaderState: PagedReaderState, dualScreenState: D
     val activity = LocalContext.current.findActivity() ?: return
     val display = remember(activity) { findSecondScreen(activity) } ?: return
 
+    // The second screen shows the navigator only while the app is on screen: leaving with the home
+    // button (or switching apps) keeps the reader open in the background, but gives the second
+    // screen back to the system.
     DisposableEffect(activity, display, dualScreenState) {
-        val presentation = NavigatorPresentation(activity, display) {
-            NavigatorContent(pagedReaderState, dualScreenState)
+        var presentation: Presentation? = null
+        fun show() {
+            if (presentation != null) return
+            presentation = NavigatorPresentation(activity, display) {
+                NavigatorContent(pagedReaderState, dualScreenState)
+            }.also { it.show() }
+            DualScreenControllerInput.target = dualScreenState
         }
-        presentation.show()
-        DualScreenControllerInput.target = dualScreenState
-        onDispose {
+        fun hide() {
             if (DualScreenControllerInput.target === dualScreenState) DualScreenControllerInput.target = null
-            presentation.dismiss()
+            presentation?.dismiss()
+            presentation = null
+        }
+
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> show()
+                Lifecycle.Event.ON_STOP -> hide()
+                else -> Unit
+            }
+        }
+        // Adding the observer replays the events up to the current state, so this also shows the
+        // navigator right away when the app is already on screen.
+        activity.lifecycle.addObserver(observer)
+        onDispose {
+            activity.lifecycle.removeObserver(observer)
+            hide()
         }
     }
 }
