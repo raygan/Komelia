@@ -21,6 +21,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType.Companion.KeyDown
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
@@ -29,6 +33,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.Res
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.settings_mobile_title
 import org.jetbrains.compose.resources.stringResource
+import snd.komelia.ui.LocalKeyEvents
 import snd.komelia.ui.LocalViewModelFactory
 import snd.komelia.ui.platform.BackPressHandler
 import snd.komelia.ui.platform.PlatformTitleBar
@@ -41,6 +46,14 @@ class MobileSettingsScreen : Screen {
         val viewModelFactory = LocalViewModelFactory.current
         val vm = rememberScreenModel { viewModelFactory.getSettingsNavigationViewModel(currentNavigator) }
         LaunchedEffect(Unit) { vm.initialize() }
+
+        // Settings is the last tab of the bottom bar; controller L2 goes back to the tab before it.
+        val keyEvents = LocalKeyEvents.current
+        LaunchedEffect(Unit) {
+            keyEvents.collect { event ->
+                if (event.type == KeyDown && event.key == Key.ButtonL2) currentNavigator.pop()
+            }
+        }
 
         Surface(
             color = MaterialTheme.colorScheme.surface,

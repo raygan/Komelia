@@ -23,12 +23,12 @@ import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.init
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import snd.komelia.ui.MainView
+import snd.komelia.ui.platform.ControllerKeyEvents
 import snd.komelia.ui.platform.PlatformType
 import snd.komelia.ui.platform.WindowSizeClass
 import snd.komelia.ui.reader.image.dualscreen.DualScreenControllerInput
@@ -38,6 +38,7 @@ private val initMutex = Mutex()
 private val mainActivity = MutableStateFlow<MainActivity?>(null)
 
 class MainActivity : AppCompatActivity() {
+    private val keyEvents = ControllerKeyEvents()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,17 +73,24 @@ class MainActivity : AppCompatActivity() {
                 windowWidth = WindowSizeClass.fromDp(windowSize.width),
                 windowHeight = WindowSizeClass.fromDp(windowSize.height),
                 platformType = PlatformType.MOBILE,
-                keyEvents = MutableSharedFlow()
+                keyEvents = keyEvents.flow
             )
         }
     }
 
-    // Dual-screen reading takes game controller input while it's open; otherwise this passes through.
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        DualScreenControllerInput.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+    // Dual-screen reading takes game controller input while it's open. Everything else also goes to
+    // the app's key event stream, so screens can react to controller buttons.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (DualScreenControllerInput.dispatchKeyEvent(event)) return true
+        keyEvents.onKeyEvent(event)
+        return super.dispatchKeyEvent(event)
+    }
 
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        DualScreenControllerInput.dispatchGenericMotionEvent(event) || super.dispatchGenericMotionEvent(event)
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (DualScreenControllerInput.dispatchGenericMotionEvent(event)) return true
+        keyEvents.onMotionEvent(event)
+        return super.dispatchGenericMotionEvent(event)
+    }
 }
 
 @Composable

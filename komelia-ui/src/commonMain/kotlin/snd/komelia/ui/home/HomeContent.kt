@@ -34,10 +34,17 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType.Companion.KeyDown
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.Res
@@ -46,9 +53,11 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import snd.komelia.komga.api.model.KomeliaBook
 import snd.komelia.komga.api.model.KomeliaSeries
+import snd.komelia.ui.LocalKeyEvents
 import snd.komelia.ui.LocalPlatform
 import snd.komelia.ui.common.cards.BookImageCard
 import snd.komelia.ui.common.cards.SeriesImageCard
+import snd.komelia.ui.common.controllerFocusOutline
 import snd.komelia.ui.common.menus.BookMenuActions
 import snd.komelia.ui.common.menus.SeriesMenuActions
 import snd.komelia.ui.platform.PlatformType
@@ -70,6 +79,36 @@ fun HomeContent(
 ) {
     val gridState = rememberLazyGridState()
     val coroutineScope = rememberCoroutineScope()
+
+    // Controller shoulder buttons L1/R1 move between the views in the toolbar, in on-screen order.
+    val viewNumbers = remember(filters) {
+        val shown = filters.filter {
+            when (it) {
+                is BookFilterData -> it.books.isNotEmpty()
+                is SeriesFilterData -> it.series.isNotEmpty()
+            }
+        }.map { it.filter.order }
+        if (filters.size > 1) listOf(0) + shown else shown
+    }
+    val currentActiveFilter by rememberUpdatedState(activeFilterNumber)
+    val keyEvents = LocalKeyEvents.current
+    LaunchedEffect(viewNumbers) {
+        keyEvents.collect { event ->
+            if (event.type != KeyDown || viewNumbers.isEmpty()) return@collect
+            val step = when (event.key) {
+                Key.ButtonL1 -> -1
+                Key.ButtonR1 -> 1
+                else -> return@collect
+            }
+            val index = viewNumbers.indexOf(currentActiveFilter).coerceAtLeast(0)
+            val next = viewNumbers[(index + step).coerceIn(viewNumbers.indices)]
+            if (next != currentActiveFilter) {
+                onFilterChange(next)
+                gridState.animateScrollToItem(0)
+            }
+        }
+    }
+
     Column {
         Toolbar(
             filters = filters,
@@ -119,6 +158,22 @@ private fun Toolbar(
         val lazyRowState = rememberLazyListState()
         val coroutineScope = rememberCoroutineScope()
 
+        // Keep the selected view's chip in sight when it changes (e.g. with L1/R1). Row items are:
+        // spacer, edit chip, "All" (with more than one view), then the views.
+        LaunchedEffect(currentFilterNumber) {
+            val chipIndex = when {
+                currentFilterNumber == 0 -> 2
+                else -> nonEmptyFilters.indexOfFirst { it.filter.order == currentFilterNumber }
+                    .takeIf { it >= 0 }
+                    ?.let { it + if (filters.size > 1) 3 else 2 }
+            } ?: return@LaunchedEffect
+            val visible = lazyRowState.layoutInfo.visibleItemsInfo
+            val shown = visible.firstOrNull { it.index == chipIndex }
+            val fullyShown = shown != null && shown.offset >= 0 &&
+                shown.offset + shown.size <= lazyRowState.layoutInfo.viewportEndOffset
+            if (!fullyShown) lazyRowState.animateScrollToItem((chipIndex - 1).coerceAtLeast(0))
+        }
+
         LazyRow(
             state = lazyRowState,
             modifier = Modifier.animateContentSize(),
@@ -138,6 +193,7 @@ private fun Toolbar(
                     },
                     colors = chipColors,
                     border = null,
+                    modifier = Modifier.controllerFocusOutline(),
                 )
             }
 
@@ -149,6 +205,7 @@ private fun Toolbar(
                         label = { Text(stringResource(Res.string.home_filter_all)) },
                         colors = chipColors,
                         border = null,
+                        modifier = Modifier.controllerFocusOutline(),
                     )
                 }
             }
@@ -166,6 +223,7 @@ private fun Toolbar(
                         label = { Text(data.filter.label) },
                         colors = chipColors,
                         border = null,
+                        modifier = Modifier.controllerFocusOutline(),
                     )
                 }
             }

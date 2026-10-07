@@ -1,5 +1,6 @@
 package snd.komelia.ui
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -41,6 +42,7 @@ import snd.komelia.KomgaAuthenticationState.DataState.AuthenticationRequired
 import snd.komelia.KomgaAuthenticationState.DataState.Loaded
 import snd.komelia.ui.Theme.Companion.toTheme
 import snd.komelia.ui.Theme.ThemeType
+import snd.komelia.ui.common.ControllerFocusIndication
 import snd.komelia.ui.common.components.LoadingMaxSizeIndicator
 import snd.komelia.ui.dialogs.update.UpdateDialog
 import snd.komelia.ui.dialogs.update.UpdateProgressDialog
@@ -104,6 +106,8 @@ fun MainView(
                 LocalKomfIntegration provides dependencies.appRepositories.komfSettingsRepository.getKomfEnabled(),
                 LocalKomfMangaBakaIntegration provides dependencies.appRepositories.komfSettingsRepository.getMangaBakaEnabled(),
                 LocalKeyEvents provides keyEvents,
+                // Orange outline on the focused item when navigating with a controller.
+                LocalIndication provides ControllerFocusIndication(LocalIndication.current),
                 LocalPlatform provides platformType,
                 LocalTheme provides theme,
                 LocalWindowState provides dependencies.windowState,

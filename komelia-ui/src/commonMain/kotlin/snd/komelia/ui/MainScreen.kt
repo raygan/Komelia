@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType.Companion.KeyDown
 import androidx.compose.ui.input.key.KeyEventType.Companion.KeyUp
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
@@ -102,9 +103,37 @@ class MainScreen(
                     if (event.type == KeyUp && event.key == Key.DirectionLeft && event.isAltPressed) {
                         navigator.pop()
                     }
-
+                    // Controller L2/R2 move between the bottom bar's tabs.
+                    if (platform == MOBILE && event.type == KeyDown) {
+                        when (event.key) {
+                            Key.ButtonL2 -> switchTab(navigator, vm, -1)
+                            Key.ButtonR2 -> switchTab(navigator, vm, 1)
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    private enum class BottomTab { LIBRARIES, HOME, SEARCH, SETTINGS }
+
+    /**
+     * Moves [step] tabs along the bottom bar: Libraries (the drawer), Home, Search, Settings.
+     * Screens opened from Home (a series, a book) count as Home.
+     */
+    private suspend fun switchTab(navigator: Navigator, vm: MainScreenViewModel, step: Int) {
+        val current = when {
+            vm.navBarState.currentValue == Open || navigator.lastItem is LibraryScreen -> BottomTab.LIBRARIES
+            navigator.lastItem is SearchScreen -> BottomTab.SEARCH
+            else -> BottomTab.HOME
+        }
+        val target = BottomTab.entries.getOrNull(current.ordinal + step) ?: return
+        if (target != BottomTab.LIBRARIES && vm.navBarState.currentValue == Open) vm.navBarState.close()
+        when (target) {
+            BottomTab.LIBRARIES -> vm.navBarState.open()
+            BottomTab.HOME -> navigator.replaceAll(HomeScreen())
+            BottomTab.SEARCH -> if (navigator.lastItem !is SearchScreen) navigator.push(SearchScreen(null))
+            BottomTab.SETTINGS -> navigator.parent?.push(MobileSettingsScreen())
         }
     }
 
