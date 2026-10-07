@@ -20,14 +20,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType.Companion.PrimaryNotEditable
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,7 +69,7 @@ fun BookReadButton(
         color = containerColor,
         contentColor = contentColor,
     ) {
-        Row(
+        WithoutFocusTint { Row(
             Modifier.height(40.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -87,7 +85,7 @@ fun BookReadButton(
                 onIncognitoRead = onIncognitoRead,
                 onDropdownOpenChange = onDropdownOpenChange
             )
-        }
+        } }
     }
 }
 
@@ -108,16 +106,13 @@ private fun ReadButton(
             .then(modifier),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val contentColor = if (controllerFocused) OnControllerFocusColor else LocalContentColor.current
-        CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Spacer(Modifier.width(5.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                contentDescription = null,
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(stringResource(Res.string.book_read_button))
-        }
+        Spacer(Modifier.width(5.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+            contentDescription = null,
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(stringResource(Res.string.book_read_button))
     }
 }
 
@@ -147,7 +142,7 @@ private fun IncognitoDropDown(
                 .then(modifier),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.ExpandMore, null, tint = if (controllerFocused) OnControllerFocusColor else LocalContentColor.current)
+            Icon(Icons.Default.ExpandMore, null)
         }
         ExposedDropdownMenu(
             expanded = isExpanded,

@@ -6,9 +6,14 @@ import androidx.compose.foundation.interaction.FocusInteraction
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ripple.RippleAlpha
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
+import androidx.compose.material3.RippleConfiguration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -146,3 +151,19 @@ fun controllerFocusButtonColors(interactionSource: InteractionSource): ButtonCol
         defaults.copy(containerColor = ControllerFocusColor, contentColor = OnControllerFocusColor)
     } else defaults
 }
+
+/**
+ * Material's ripple without its focus tint, for components that show controller focus by turning
+ * [ControllerFocusColor]: the tint is drawn in the content color, so it would lighten or darken the
+ * orange depending on the text color.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WithoutFocusTint(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalRippleConfiguration provides noFocusTintRipple, content = content)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+private val noFocusTintRipple = RippleConfiguration(
+    rippleAlpha = RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0f, hoveredAlpha = 0.08f, pressedAlpha = 0.10f)
+)

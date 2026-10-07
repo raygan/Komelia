@@ -62,6 +62,7 @@ import snd.komelia.ui.LocalOfflineAvailable
 import snd.komelia.ui.LocalOfflineMode
 import snd.komelia.ui.LocalWindowWidth
 import snd.komelia.ui.common.BookReadButton
+import snd.komelia.ui.common.WithoutFocusTint
 import snd.komelia.ui.common.components.ExpandableText
 import snd.komelia.ui.common.controllerFocusButtonColors
 import snd.komelia.ui.common.images.BookThumbnail
@@ -266,13 +267,15 @@ private fun FlowRowScope.BookMainInfo(
             }
             if (offlineAvailable && book.downloaded) {
                 val interactionSource = remember { MutableInteractionSource() }
-                ElevatedButton(
-                    onClick = onDownloadDelete,
-                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.errorContainer),
-                    interactionSource = interactionSource,
-                    colors = controllerFocusButtonColors(interactionSource),
-                ) {
-                    Text(stringResource(Res.string.book_delete_downloaded))
+                WithoutFocusTint {
+                    ElevatedButton(
+                        onClick = onDownloadDelete,
+                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.errorContainer),
+                        interactionSource = interactionSource,
+                        colors = controllerFocusButtonColors(interactionSource),
+                    ) {
+                        Text(stringResource(Res.string.book_delete_downloaded))
+                    }
                 }
             }
         }
@@ -298,7 +301,7 @@ fun DownloadButton(
     }
 
     val interactionSource = remember { MutableInteractionSource() }
-    ElevatedButton(
+    WithoutFocusTint { ElevatedButton(
         enabled = downloadEvent == null,
         onClick = { showDownloadConfirmation = true },
         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
@@ -335,7 +338,7 @@ fun DownloadButton(
         Text(stringResource(Res.string.book_download))
 
 
-    }
+    } }
 
     if (showDownloadConfirmation) {
         var permissionRequested by remember { mutableStateOf(false) }
