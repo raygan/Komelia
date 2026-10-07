@@ -1,8 +1,6 @@
 package snd.komelia.ui.common
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -12,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.filled.ExpandMore
@@ -69,7 +68,7 @@ fun BookReadButton(
         color = containerColor,
         contentColor = contentColor,
     ) {
-        WithoutFocusTint { Row(
+        Row(
             Modifier.height(40.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -85,7 +84,7 @@ fun BookReadButton(
                 onIncognitoRead = onIncognitoRead,
                 onDropdownOpenChange = onDropdownOpenChange
             )
-        } }
+        }
     }
 }
 
@@ -95,14 +94,11 @@ private fun ReadButton(
     onRead: () -> Unit,
     focusRequester: FocusRequester?,
 ) {
-    // With controller focus this half of the button turns orange (the pill shape clips it).
-    val interactionSource = remember { MutableInteractionSource() }
-    val controllerFocused = controllerFocused(interactionSource)
     Row(
         modifier = Modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .then(if (controllerFocused) Modifier.background(ControllerFocusColor) else Modifier)
-            .clickable(interactionSource = interactionSource, indication = ripple()) { onRead() }
+            // The focus ring follows this half of the pill: rounded at the start, straight at the divider.
+            .clickable(interactionSource = null, indication = ripple(focusRingShape = readHalfShape)) { onRead() }
             .then(modifier),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -132,12 +128,9 @@ private fun IncognitoDropDown(
         },
     ) {
 
-        val interactionSource = remember { MutableInteractionSource() }
-        val controllerFocused = controllerFocused(interactionSource)
         Box(
             modifier = Modifier
-                .then(if (controllerFocused) Modifier.background(ControllerFocusColor) else Modifier)
-                .clickable(interactionSource = interactionSource, indication = ripple()) { isExpanded = true }
+                .clickable(interactionSource = null, indication = ripple(focusRingShape = dropdownHalfShape)) { isExpanded = true }
                 .menuAnchor(PrimaryNotEditable)
                 .then(modifier),
             contentAlignment = Alignment.Center
@@ -160,3 +153,6 @@ private fun IncognitoDropDown(
         }
     }
 }
+
+private val readHalfShape = RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50)
+private val dropdownHalfShape = RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50)

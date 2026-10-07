@@ -3,7 +3,6 @@ package snd.komelia.ui.book
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,9 +61,7 @@ import snd.komelia.ui.LocalOfflineAvailable
 import snd.komelia.ui.LocalOfflineMode
 import snd.komelia.ui.LocalWindowWidth
 import snd.komelia.ui.common.BookReadButton
-import snd.komelia.ui.common.WithoutFocusTint
 import snd.komelia.ui.common.components.ExpandableText
-import snd.komelia.ui.common.controllerFocusButtonColors
 import snd.komelia.ui.common.images.BookThumbnail
 import snd.komelia.ui.common.menus.BookActionsMenu
 import snd.komelia.ui.common.menus.BookMenuActions
@@ -266,16 +263,11 @@ private fun FlowRowScope.BookMainInfo(
                 }
             }
             if (offlineAvailable && book.downloaded) {
-                val interactionSource = remember { MutableInteractionSource() }
-                WithoutFocusTint {
-                    ElevatedButton(
-                        onClick = onDownloadDelete,
-                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.errorContainer),
-                        interactionSource = interactionSource,
-                        colors = controllerFocusButtonColors(interactionSource),
-                    ) {
-                        Text(stringResource(Res.string.book_delete_downloaded))
-                    }
+                ElevatedButton(
+                    onClick = onDownloadDelete,
+                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Text(stringResource(Res.string.book_delete_downloaded))
                 }
             }
         }
@@ -300,14 +292,11 @@ fun DownloadButton(
         downloadEvents?.filter { it.bookId == book.id }?.collect { downloadEvent = it }
     }
 
-    val interactionSource = remember { MutableInteractionSource() }
-    WithoutFocusTint { ElevatedButton(
+    ElevatedButton(
         enabled = downloadEvent == null,
         onClick = { showDownloadConfirmation = true },
         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
-        elevation = null,
-        interactionSource = interactionSource,
-        colors = controllerFocusButtonColors(interactionSource),
+        elevation = null
     ) {
         when (val event = downloadEvent) {
             is DownloadEvent.BookDownloadProgress -> {
@@ -338,7 +327,7 @@ fun DownloadButton(
         Text(stringResource(Res.string.book_download))
 
 
-    } }
+    }
 
     if (showDownloadConfirmation) {
         var permissionRequested by remember { mutableStateOf(false) }

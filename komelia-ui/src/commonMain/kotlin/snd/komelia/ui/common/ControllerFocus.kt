@@ -12,6 +12,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.RippleConfiguration
+import androidx.compose.material3.RippleThemeConfiguration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -166,4 +167,29 @@ fun WithoutFocusTint(content: @Composable () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 private val noFocusTintRipple = RippleConfiguration(
     rippleAlpha = RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0f, hoveredAlpha = 0.08f, pressedAlpha = 0.10f)
+)
+
+/**
+ * Material's own focus ring, in orange, for every component that uses Material's ripple. Focus
+ * only happens when navigating with a controller or keyboard, so touch users never see it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+val controllerFocusRipple = RippleConfiguration(
+    focus = RippleConfiguration.Focus.InsetRing(
+        outerStrokeColor = ControllerFocusColor,
+        innerStrokeColor = Color.Transparent,
+    )
+)
+
+/**
+ * Material's inset focus ring style, thicker than its 2 dp default so it stands out against cover
+ * art on the book and series cards.
+ */
+val controllerFocusRingStyle = RippleThemeConfiguration(
+    focus = RippleThemeConfiguration.Focus.InsetRing(
+        outerStrokeInset = 0.dp,
+        outerStrokeWidth = 4.dp,
+        innerStrokeInset = 4.dp,
+        innerStrokeWidth = 1.dp,
+    )
 )

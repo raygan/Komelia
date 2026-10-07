@@ -1,11 +1,12 @@
 package snd.komelia.ui
 
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.material3.LocalRippleConfiguration
+import androidx.compose.material3.LocalRippleThemeConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -42,8 +43,9 @@ import snd.komelia.KomgaAuthenticationState.DataState.AuthenticationRequired
 import snd.komelia.KomgaAuthenticationState.DataState.Loaded
 import snd.komelia.ui.Theme.Companion.toTheme
 import snd.komelia.ui.Theme.ThemeType
-import snd.komelia.ui.common.ControllerFocusIndication
 import snd.komelia.ui.common.components.LoadingMaxSizeIndicator
+import snd.komelia.ui.common.controllerFocusRingStyle
+import snd.komelia.ui.common.controllerFocusRipple
 import snd.komelia.ui.dialogs.update.UpdateDialog
 import snd.komelia.ui.dialogs.update.UpdateProgressDialog
 import snd.komelia.ui.komf.KomfMainScreen
@@ -106,8 +108,9 @@ fun MainView(
                 LocalKomfIntegration provides dependencies.appRepositories.komfSettingsRepository.getKomfEnabled(),
                 LocalKomfMangaBakaIntegration provides dependencies.appRepositories.komfSettingsRepository.getMangaBakaEnabled(),
                 LocalKeyEvents provides keyEvents,
-                // Orange outline on the focused item when navigating with a controller.
-                LocalIndication provides ControllerFocusIndication(LocalIndication.current),
+                // Orange focus ring (Material's own) on the focused item when navigating with a controller.
+                LocalRippleThemeConfiguration provides controllerFocusRingStyle,
+                LocalRippleConfiguration provides controllerFocusRipple,
                 LocalPlatform provides platformType,
                 LocalTheme provides theme,
                 LocalWindowState provides dependencies.windowState,

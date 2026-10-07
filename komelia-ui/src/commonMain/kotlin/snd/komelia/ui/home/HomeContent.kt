@@ -57,7 +57,6 @@ import snd.komelia.ui.LocalKeyEvents
 import snd.komelia.ui.LocalPlatform
 import snd.komelia.ui.common.cards.BookImageCard
 import snd.komelia.ui.common.cards.SeriesImageCard
-import snd.komelia.ui.common.controllerFocusOutline
 import snd.komelia.ui.common.menus.BookMenuActions
 import snd.komelia.ui.common.menus.SeriesMenuActions
 import snd.komelia.ui.platform.PlatformType
@@ -193,7 +192,6 @@ private fun Toolbar(
                     },
                     colors = chipColors,
                     border = null,
-                    modifier = Modifier.controllerFocusOutline(FilterChipDefaults.shape, FilterChipDefaults.Height),
                 )
             }
 
@@ -205,7 +203,6 @@ private fun Toolbar(
                         label = { Text(stringResource(Res.string.home_filter_all)) },
                         colors = chipColors,
                         border = null,
-                        modifier = Modifier.controllerFocusOutline(FilterChipDefaults.shape, FilterChipDefaults.Height),
                     )
                 }
             }
@@ -223,7 +220,6 @@ private fun Toolbar(
                         label = { Text(data.filter.label) },
                         colors = chipColors,
                         border = null,
-                        modifier = Modifier.controllerFocusOutline(FilterChipDefaults.shape, FilterChipDefaults.Height),
                     )
                 }
             }
