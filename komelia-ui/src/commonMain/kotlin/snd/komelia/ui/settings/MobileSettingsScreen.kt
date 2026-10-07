@@ -33,6 +33,8 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.Res
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.settings_mobile_title
 import org.jetbrains.compose.resources.stringResource
+import snd.komelia.ui.BottomTab
+import snd.komelia.ui.BottomTabRequests
 import snd.komelia.ui.LocalKeyEvents
 import snd.komelia.ui.LocalViewModelFactory
 import snd.komelia.ui.platform.BackPressHandler
@@ -47,11 +49,19 @@ class MobileSettingsScreen : Screen {
         val vm = rememberScreenModel { viewModelFactory.getSettingsNavigationViewModel(currentNavigator) }
         LaunchedEffect(Unit) { vm.initialize() }
 
-        // Settings is the last tab of the bottom bar; controller L2 goes back to the tab before it.
+        // Settings is the last tab of the bottom bar: controller L2 goes to Search before it, and
+        // R2 wraps around to Libraries.
         val keyEvents = LocalKeyEvents.current
         LaunchedEffect(Unit) {
             keyEvents.collect { event ->
-                if (event.type == KeyDown && event.key == Key.ButtonL2) currentNavigator.pop()
+                if (event.type != KeyDown) return@collect
+                val tab = when (event.key) {
+                    Key.ButtonL2 -> BottomTab.SEARCH
+                    Key.ButtonR2 -> BottomTab.LIBRARIES
+                    else -> return@collect
+                }
+                BottomTabRequests.pending.value = tab
+                currentNavigator.pop()
             }
         }
 

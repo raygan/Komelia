@@ -193,7 +193,7 @@ private fun Toolbar(
                     },
                     colors = chipColors,
                     border = null,
-                    modifier = Modifier.controllerFocusOutline(),
+                    modifier = Modifier.controllerFocusOutline(FilterChipDefaults.shape, FilterChipDefaults.Height),
                 )
             }
 
@@ -205,7 +205,7 @@ private fun Toolbar(
                         label = { Text(stringResource(Res.string.home_filter_all)) },
                         colors = chipColors,
                         border = null,
-                        modifier = Modifier.controllerFocusOutline(),
+                        modifier = Modifier.controllerFocusOutline(FilterChipDefaults.shape, FilterChipDefaults.Height),
                     )
                 }
             }
@@ -223,7 +223,7 @@ private fun Toolbar(
                         label = { Text(data.filter.label) },
                         colors = chipColors,
                         border = null,
-                        modifier = Modifier.controllerFocusOutline(),
+                        modifier = Modifier.controllerFocusOutline(FilterChipDefaults.shape, FilterChipDefaults.Height),
                     )
                 }
             }

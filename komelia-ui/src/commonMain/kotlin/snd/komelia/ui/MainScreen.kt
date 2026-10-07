@@ -54,7 +54,9 @@ import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.navbar_home
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.navbar_libraries
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.navbar_search
 import io.github.snd_r.komelia.ui.komelia_ui.generated.resources.navbar_settings
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import snd.komelia.ui.book.bookScreen
@@ -97,6 +99,14 @@ class MainScreen(
                 vm.initialize(navigator)
             }
 
+            // Settings opens outside this layout; when L2/R2 leave it, it asks for the next tab.
+            LaunchedEffect(Unit) {
+                BottomTabRequests.pending.filterNotNull().collect { tab ->
+                    BottomTabRequests.pending.value = null
+                    goToTab(navigator, vm, tab)
+                }
+            }
+
             val keyEvents: SharedFlow<KeyEvent> = LocalKeyEvents.current
             LaunchedEffect(Unit) {
                 keyEvents.collect { event ->
@@ -115,11 +125,9 @@ class MainScreen(
         }
     }
 
-    private enum class BottomTab { LIBRARIES, HOME, SEARCH, SETTINGS }
-
     /**
-     * Moves [step] tabs along the bottom bar: Libraries (the drawer), Home, Search, Settings.
-     * Screens opened from Home (a series, a book) count as Home.
+     * Moves [step] tabs along the bottom bar, wrapping around: Libraries (the drawer), Home,
+     * Search, Settings. Screens opened from Home (a series, a book) count as Home.
      */
     private suspend fun switchTab(navigator: Navigator, vm: MainScreenViewModel, step: Int) {
         val current = when {
@@ -127,7 +135,11 @@ class MainScreen(
             navigator.lastItem is SearchScreen -> BottomTab.SEARCH
             else -> BottomTab.HOME
         }
-        val target = BottomTab.entries.getOrNull(current.ordinal + step) ?: return
+        val tabs = BottomTab.entries
+        goToTab(navigator, vm, tabs[(current.ordinal + step).mod(tabs.size)])
+    }
+
+    private suspend fun goToTab(navigator: Navigator, vm: MainScreenViewModel, target: BottomTab) {
         if (target != BottomTab.LIBRARIES && vm.navBarState.currentValue == Open) vm.navBarState.close()
         when (target) {
             BottomTab.LIBRARIES -> vm.navBarState.open()
@@ -371,4 +383,12 @@ class MainScreen(
             },
         )
     }
+}
+
+/** The bottom bar's tabs in order, for moving between them with a controller's L2/R2. */
+internal enum class BottomTab { LIBRARIES, HOME, SEARCH, SETTINGS }
+
+/** Lets Settings, which opens outside the main layout, ask it to go to a tab after closing. */
+internal object BottomTabRequests {
+    val pending = MutableStateFlow<BottomTab?>(null)
 }

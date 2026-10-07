@@ -3,6 +3,7 @@ package snd.komelia.ui.book
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,8 +40,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -59,6 +63,7 @@ import snd.komelia.ui.LocalOfflineMode
 import snd.komelia.ui.LocalWindowWidth
 import snd.komelia.ui.common.BookReadButton
 import snd.komelia.ui.common.components.ExpandableText
+import snd.komelia.ui.common.controllerFocusButtonColors
 import snd.komelia.ui.common.images.BookThumbnail
 import snd.komelia.ui.common.menus.BookActionsMenu
 import snd.komelia.ui.common.menus.BookMenuActions
@@ -243,9 +248,16 @@ private fun FlowRowScope.BookMainInfo(
 
             if (!book.deleted && !library.unavailable) {
                 if (readIsSupported(book)) {
+                    // Arriving with a controller, start on Read rather than wherever focus lands.
+                    val readFocus = remember { FocusRequester() }
+                    val inputMode = LocalInputModeManager.current.inputMode
+                    LaunchedEffect(book.id) {
+                        if (inputMode == InputMode.Keyboard) runCatching { readFocus.requestFocus() }
+                    }
                     BookReadButton(
                         onRead = { onBookReadPress(true) },
                         onIncognitoRead = { onBookReadPress(false) },
+                        readFocusRequester = readFocus,
                     )
                 }
                 if (offlineAvailable && (!book.downloaded || book.isLocalFileOutdated)) {
@@ -253,9 +265,12 @@ private fun FlowRowScope.BookMainInfo(
                 }
             }
             if (offlineAvailable && book.downloaded) {
+                val interactionSource = remember { MutableInteractionSource() }
                 ElevatedButton(
                     onClick = onDownloadDelete,
-                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.errorContainer)
+                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.errorContainer),
+                    interactionSource = interactionSource,
+                    colors = controllerFocusButtonColors(interactionSource),
                 ) {
                     Text(stringResource(Res.string.book_delete_downloaded))
                 }
@@ -282,11 +297,14 @@ fun DownloadButton(
         downloadEvents?.filter { it.bookId == book.id }?.collect { downloadEvent = it }
     }
 
+    val interactionSource = remember { MutableInteractionSource() }
     ElevatedButton(
         enabled = downloadEvent == null,
         onClick = { showDownloadConfirmation = true },
         modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
-        elevation = null
+        elevation = null,
+        interactionSource = interactionSource,
+        colors = controllerFocusButtonColors(interactionSource),
     ) {
         when (val event = downloadEvent) {
             is DownloadEvent.BookDownloadProgress -> {
