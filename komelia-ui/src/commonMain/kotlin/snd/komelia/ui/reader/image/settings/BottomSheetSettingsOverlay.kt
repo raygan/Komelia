@@ -306,16 +306,16 @@ private fun BottomSheetReadingModeSettings(
                 onClick = { onReaderTypeChange(PAGED) },
                 label = { Text(stringResource(Res.string.reader_type_paged)) }
             )
+            InputChip(
+                selected = readerType == CONTINUOUS,
+                onClick = { onReaderTypeChange(CONTINUOUS) },
+                label = { Text(stringResource(Res.string.reader_type_continuous)) }
+            )
             // Dual screen is only offered on devices with a second screen.
             if (rememberDualScreenSettings() != null) InputChip(
                 selected = readerType == DUAL_SCREEN,
                 onClick = { onReaderTypeChange(DUAL_SCREEN) },
                 label = { Text(stringResource(Res.string.reader_type_dual_screen)) }
-            )
-            InputChip(
-                selected = readerType == CONTINUOUS,
-                onClick = { onReaderTypeChange(CONTINUOUS) },
-                label = { Text(stringResource(Res.string.reader_type_continuous)) }
             )
             if (panelsReaderState != null)
                 InputChip(
