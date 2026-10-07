@@ -19,6 +19,7 @@ object DualScreenControllerInput {
     var target: DualScreenState? = null
 
     private var hatX = 0
+    private var hatY = 0
     private var leftTriggerDown = false
     private var rightTriggerDown = false
     private var triggersSendKeys = false
@@ -50,14 +51,18 @@ object DualScreenControllerInput {
     }
 
     /**
-     * The D-pad turns pages left and right on screen, so which button does it depends on how the
-     * device is held: held vertically with the main screen on the right, up turns right.
+     * The D-pad turns pages left and right on screen and, in Loupe mode, steps through the page
+     * down and up like R1/L1. Which button does what depends on how the device is held: held
+     * vertically with the main screen on the right, up turns right.
      */
     private fun dpadAction(state: DualScreenState, x: Float, y: Float): (() -> Unit)? {
         val direction = state.toScreenDirection(x, y)
+        val loupe = state.mode.value == ZoomMode.LOUPE
         return when {
             direction.x < -0.5f -> state::turnLeft
             direction.x > 0.5f -> state::turnRight
+            direction.y < -0.5f && loupe -> state::stepPrevious
+            direction.y > 0.5f && loupe -> state::stepNext
             else -> null
         }
     }
@@ -87,6 +92,12 @@ object DualScreenControllerInput {
             if (hat > 0) state.turnRight()
         }
         hatX = hat
+        val hatVertical = hatDirection.y.let { if (abs(it) > 0.5f) it.sign.toInt() else 0 }
+        if (hatVertical != hatY && state.mode.value == ZoomMode.LOUPE) {
+            if (hatVertical < 0) state.stepPrevious()
+            if (hatVertical > 0) state.stepNext()
+        }
+        hatY = hatVertical
 
         if (!triggersSendKeys) {
             val left = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE)) > 0.5f
